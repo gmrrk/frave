@@ -1,4 +1,8 @@
+use std::collections::HashMap;
+
 use num::complex::Complex;
+
+use crate::images::RasterImage;
 
 //fn get_literals<const N: usize>(d: f32) -> [Complex<f32>; N] {
 //    let base = Complex::new(d / 2., (2. - (d / 2.).powf(2.)).sqrt());
@@ -22,31 +26,7 @@ use num::complex::Complex;
 //    powers
 //}
 
-
-
-/*
- * CENTERS represent the optimal center of fractal space for biggest rectangle that has specific dimensions
- * Calculation can be found in fractal_lattice repo. This is statically encoded in codec
- * to save it from doing costly calculations in runtime. Unfortunately Rust const functions are
- * not yet sophisticated enough to calculate these numbers in compile time
- */
-pub static CENTERS: [((i32, i32), Complex<i32>, u8); 15] = [
-    ((17,8), Complex { re: 1, im: 2}, 9),
-    ((47,9), Complex { re: 31, im: 1}, 10),
-    ((41,26), Complex { re: 26, im: 18}, 11),
-    ((88,15), Complex { re: 21, im: 7}, 12),
-    ((108,65), Complex { re: 88, im: 43}, 14),
-    ((227,60), Complex { re: 82, im: 41}, 15),
-    ((202,149), Complex { re: 88, im: 40}, 16),
-    ((284,84), Complex { re: 266, im: 52}, 17),
-    ((649,148), Complex { re: 246, im: 130}, 18),
-    ((651,418), Complex { re: 175, im: 130}, 19),
-    ((1542, 333), Complex { re: 1120, im: 130}, 20),
-    ((997,458), Complex { re: 449, im: 421}, 21),
-    ((1148,883), Complex { re: 74, im: 320}, 22),
-    ((4243,960), Complex { re: 2869, im: 215}, 23),
-    ((3648,2439), Complex { re: 2375, im: 1725}, 24),
-];
+pub const BASE_FRAC_DEPTH: usize = 9;
 
 pub static LITERALS: [Complex<i32>; 30] = 
              [
@@ -84,4 +64,216 @@ pub static LITERALS: [Complex<i32>; 30] =
                     im: -7917,
                 },
             ];
+
+fn try_apply<T: Copy>(
+    first: Option<T>,
+    second: Option<T>,
+    operation: fn(T, T) -> T,
+    default: T,
+) -> Option<T> {
+    match (first, second) {
+        (Some(f), Some(s)) => Some(operation(f, s)),
+        (Some(f), None) => Some(operation(f, default)),
+        (None, Some(s)) => Some(operation(default, s)),
+        (None, None) => None,
+    }
+}
+
+#[derive(Debug)]
+pub struct Fractal {
+    pub depth: usize,
+    pub center: Complex<i32>,
+    pub coefficients: [Vec<Option<i32>>; 3],
+    pub parameter_predictors: [Vec<(usize, i32)>; 3],
+    pub values: [Vec<Option<i32>>; 3],
+    pub position_map: Vec<HashMap<Complex<i32>, usize>>,
+    pub image_positions: Vec<Complex<i32>>,
+}
+
+impl Fractal {
+    pub fn new(depth: usize, center: Complex<i32>) -> Self {
+        let mut position_map = vec![HashMap::new(); depth as usize];
+        let mut image_positions = vec![Complex::<i32>::new(0, 0); 1 << (depth + 1)];
+        image_positions[0] = center;
+        image_positions[1] = center;
+        for level in 0..depth {
+            for pos in 1 << level..1 << (level + 1) {
+                position_map[level as usize].insert(image_positions[pos], pos);
+                image_positions[2 * pos] = image_positions[pos];
+                image_positions[2 * pos + 1] =
+                    image_positions[pos] + LITERALS[(depth - level - 1) as usize];
+            }
+        }
+
+        Fractal {
+            depth,
+            center,
+            coefficients: [vec![], vec![], vec![]],
+            parameter_predictors: [
+                vec![(0, 0); 1 << depth],
+                vec![(0, 0); 1 << depth],
+                vec![(0, 0); 1 << depth],
+            ],
+            position_map,
+            image_positions,
+            values: [vec![], vec![], vec![]],
+        }
+    }
+
+    pub fn get_nearby_vectors(depth: usize) -> [Complex<i32>; 6] {
+        if depth == 1 {
+            let zl = Complex::new(-1, 1);
+            let zmd = Complex::new(0, 2);
+            return [zl, zl - zmd, -zmd, -zl, zmd - zl, zmd];
+        } else if depth == 2 {
+            let zl = Complex::new(-2, 0);
+            let zmd = Complex::new(-0, -2);
+            return [zl, zl - zmd, -zmd, -zl, zmd - zl, zmd];
+        } else if depth == 3 {
+            let zl = Complex::new(-3, -1);
+            let zmd = Complex::new(-1, -3);
+            return [zl, zl - zmd, -zmd, -zl, zmd - zl, zmd];
+        } else {
+            let zl = LITERALS[depth as usize];
+            let zmd = LITERALS[depth as usize + 1] + zl;
+
+            return [zl, zl - zmd, -zmd, -zl, zmd - zl, zmd];
+        }
+    }
+
+    pub fn get_neighbour_locations(&self) -> [Complex<i32>; 6] {
+        let vectors = Self::get_nearby_vectors(self.depth as usize);
+        return vectors.map(|x| self.center + x).try_into().unwrap();
+    }
+
+    pub fn get_left(
+        center: Complex<i32>,
+        depth: usize,
+        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+    ) -> Complex<i32> {
+        let vectors = Self::get_nearby_vectors(depth);
+        center + vectors[4]
+    }
+
+    pub fn get_right(
+        center: Complex<i32>,
+        depth: usize,
+        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+    ) -> Complex<i32> {
+        let vectors = Self::get_nearby_vectors(depth);
+        center + vectors[1]
+    }
+
+    pub fn get_down_left(
+        center: Complex<i32>,
+        depth: usize,
+        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+    ) -> Complex<i32> {
+        let vectors = Self::get_nearby_vectors(depth);
+        if depth == 2
+            && !global_position_map[depth as usize].contains_key(&(center + vectors[3]))
+            && global_position_map[depth as usize].contains_key(&(center + Complex::new(1, 1)))
+        {
+            center + Complex::new(1, 1)
+        } else {
+            center + vectors[3]
+        }
+    }
+
+    pub fn get_down_right(
+        center: Complex<i32>,
+        depth: usize,
+        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+    ) -> Complex<i32> {
+        let vectors = Self::get_nearby_vectors(depth);
+        if depth == 2
+            && !global_position_map[depth as usize].contains_key(&(center + vectors[3]))
+            && global_position_map[depth as usize].contains_key(&(center + Complex::new(1, 1)))
+        {
+            center + Complex::new(1, 1) + vectors[1]
+        } else {
+            center + vectors[2]
+        }
+    }
+
+    pub fn get_up_right(
+        center: Complex<i32>,
+        depth: usize,
+        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+    ) -> Complex<i32> {
+        let vectors = Self::get_nearby_vectors(depth);
+        if depth == 2
+            && !global_position_map[depth as usize].contains_key(&(center + vectors[0]))
+            && global_position_map[depth as usize].contains_key(&(center + Complex::new(-1, -1)))
+        {
+            center + Complex::new(-1, -1)
+        } else {
+            center + vectors[0]
+        }
+    }
+
+    pub fn get_up_left(
+        center: Complex<i32>,
+        depth: usize,
+        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+    ) -> Complex<i32> {
+        let vectors = Self::get_nearby_vectors(depth);
+        if depth == 2
+            && !global_position_map[depth as usize].contains_key(&(center + vectors[0]))
+            && global_position_map[depth as usize].contains_key(&(center + Complex::new(-1, -1)))
+        {
+            center + Complex::new(-1, -1) + vectors[4]
+        } else {
+            center + vectors[5]
+        }
+    }
+
+    pub fn extract_coefficients(&mut self, raster_image: &RasterImage, depth: usize) {
+        let mut coefficients = [
+            vec![None; 1 << depth],
+            vec![None; 1 << depth],
+            vec![None; 1 << depth],
+        ];
+
+        let mut low_pass_values = [
+            vec![None; 1 << depth],
+            vec![None; 1 << depth],
+            vec![None; 1 << depth],
+        ];
+        for channel in 0..raster_image.metadata.colorspace.num_channels() {
+            for level in (0..depth).rev() {
+                // compute high-pass and low-pass components
+                for pos in 1 << level..1 << (level + 1) {
+                    let (left_coef, right_coef): (Option<i32>, Option<i32>);
+                    if level == depth - 1 {
+                        left_coef = raster_image.get_pixel(
+                            self.image_positions[2 * pos].re,
+                            self.image_positions[2 * pos].im,
+                            channel,
+                        );
+                        right_coef = raster_image.get_pixel(
+                            self.image_positions[2 * pos + 1].re,
+                            self.image_positions[2 * pos + 1].im,
+                            channel,
+                        );
+                    } else {
+                        left_coef = low_pass_values[channel][2 * pos];
+                        right_coef = low_pass_values[channel][2 * pos + 1];
+                    }
+                    coefficients[channel][pos] =
+                        try_apply(left_coef, right_coef, |l, r| (l - r), 0);
+                    low_pass_values[channel][pos] = try_apply(
+                        right_coef,
+                        coefficients[channel][pos],
+                        |l, r| (l + r / 2),
+                        0,
+                    );
+                }
+            }
+            coefficients[channel][0] = low_pass_values[channel][1];
+        }
+        self.values = low_pass_values;
+        self.coefficients = coefficients;
+    }
+}
 

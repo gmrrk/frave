@@ -8,11 +8,12 @@ use num::{Complex, PrimInt};
 
 use crate::context_modeling::ContextModeler;
 use crate::encoder::EncoderOpts;
+use crate::fractal::Fractal;
 use crate::stages::entropy_coding::AnsContext;
-use crate::stages::wavelet_transform::{Fractal, WaveletImage};
+use crate::stages::wavelet_transform::WaveletImage;
 use crate::{fractal, utils};
 
-pub const CONTEXT_AMOUNT: usize = 10;
+pub const CONTEXT_AMOUNT: usize = 90;
 
 fn emit_coefficients(data: &[u32], ctx_id: usize, ctx_channel: usize) {
     std::fs::create_dir_all("./coefficients").unwrap();
@@ -52,23 +53,23 @@ fn get_containing_fractal(
     None
 }
 
-pub fn assign_bucket(width: f32) -> usize {
+pub fn assign_bucket(width: f32, level: usize) -> usize {
     match width as u32 {
-        0..3 => 0,
-        3..5 => 1,
-        5..6 => 2,
-        6..8 => 3,
-        8..12 => 4,
-        12..16 => 5,
-        16..20 => 6,
-        20..25 => 7,
-        25..30 => 8,
-        30.. => 9,
+        0..3 => level * 10 + 0,
+        3..5 => level * 10 + 1,
+        5..6 => level * 10 + 2,
+        6..8 => level * 10 + 3,
+        8..12 => level * 10 + 4,
+        12..16 => level * 10 + 5,
+        16..20 => level * 10 + 6,
+        20..25 => level * 10 + 7,
+        25..30 => level * 10 + 8,
+        30.. => level * 10 + 9,
     }
 }
 
 pub fn get_width_from_bucket(bucket: usize) -> f32 {
-    match bucket as u32 {
+    match bucket % 10 {
         0 => 2.5,
         1 => 4.5,
         2 => 6.3,
@@ -85,7 +86,7 @@ pub fn get_width_from_bucket(bucket: usize) -> f32 {
 
 pub fn get_lf_context_bucket(
     position: usize,
-    current_depth: u8,
+    current_depth: usize,
     parent_fractal_pos: &Complex<i32>,
     fractal_lattice: &HashMap<Complex<i32>, Fractal>,
     channel: usize,
@@ -133,7 +134,7 @@ pub fn get_lf_context_bucket(
 
     let width: u32 = (values[0] - values[2]).abs() as u32;
 
-    let bucket = assign_bucket(width as f32);
+    let bucket = assign_bucket(width as f32, level);
 
     let prediction = if values[1] >= max(values[0], values[2]) {
         max(values[0], values[2])
@@ -150,7 +151,7 @@ pub fn get_lf_context_bucket(
 
 pub fn get_hf_context_bucket(
     image_position: Complex<i32>,
-    current_depth: u8,
+    current_depth: usize,
     parent_fractal_pos: &Complex<i32>,
     fractal_lattice: &HashMap<Complex<i32>, Fractal>,
     global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
@@ -162,21 +163,8 @@ pub fn get_hf_context_bucket(
 
     let depth = fractal_lattice[parent_fractal_pos].depth;
 
-    let value_prediction_params_layer = if current_depth < depth - 2 {
-        value_prediction_params[2]
-    } else if current_depth == depth - 2 {
-        value_prediction_params[1]
-    } else {
-        value_prediction_params[0]
-    };
-
-    let width_prediction_params_layer = if current_depth < depth - 2 {
-        width_prediction_params[2]
-    } else if current_depth == depth - 2 {
-        width_prediction_params[1]
-    } else {
-        width_prediction_params[0]
-    };
+    let value_prediction_params_layer = value_prediction_params[current_depth];
+    let width_prediction_params_layer = width_prediction_params[current_depth]; 
 
     let values = ContextModeler::get_neighbour_values(
         image_position,
@@ -194,7 +182,8 @@ pub fn get_hf_context_bucket(
         + width_prediction_params_layer[4] * ((values[1] - values[5]).abs() as f32)
         + width_prediction_params_layer[5] * ((values[2] - values[4]).abs() as f32);
 
-    let bucket = assign_bucket(width);
+
+    let bucket = assign_bucket(width, current_depth);
 
     let prediction = (values[0] as f32) * value_prediction_params_layer[0]
         + (values[1] as f32) * value_prediction_params_layer[1]

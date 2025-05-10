@@ -1,7 +1,8 @@
 use crate::encoder::EncoderOpts;
+use crate::fractal::Fractal;
 use crate::images::{ChannelData, CompressedImage};
 use crate::stages::prediction;
-use crate::stages::wavelet_transform::{Fractal, WaveletImage};
+use crate::stages::wavelet_transform::WaveletImage;
 use crate::{fractal, utils};
 
 use core::f32;
@@ -22,7 +23,7 @@ use crate::stages::prediction::CONTEXT_AMOUNT;
 
 use super::prediction::{get_width_from_bucket, laplace_distribution};
 
-pub const ALPHABET_SIZE: usize = 1024;
+pub const ALPHABET_SIZE: usize = 1 << 10;
 
 //fn get_first_some_starting_from(i: usize, vec: &Vec<Option<i32>>) -> usize {
 //    (i..vec.len()).find(|j| vec[*j].is_some()).unwrap()
@@ -103,8 +104,12 @@ impl AnsContext {
         if self.max_freq_bits < 8 {
             self.max_freq_bits = 8
         }
-
+    
+        if self.freqs.iter().sum::<u32>() as usize == 0 {
+            return;
+        }
         self.fill_with_laplace(bucket);
+
         if normalize {
             self.cdf = self.normalize_freqs(1 << self.max_freq_bits);
         } else {
@@ -205,7 +210,7 @@ pub fn encode_symbol(
 fn decode_symbol<const T: usize>(
     image_position: Complex<i32>,
     haar_tree_position: usize,
-    depth: u8,
+    depth: usize,
     parent_pos: &Complex<i32>,
     channel: usize,
     ans_contexts: &Vec<AnsContext>,
