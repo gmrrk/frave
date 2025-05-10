@@ -76,8 +76,8 @@ pub fn optimize(cmd: OptimizeCommand) {
                 quality: libfri::encoder::EncoderQuality::Lossless,
                 emit_coefficients: false,
                 verbose: false,
-                value_prediction_params: [vec![[0.;6];3], vec![[0.;6];3], vec![[0.;6];3]],
-                width_prediction_params: [vec![], vec![], vec![]],
+                value_prediction_params: Default::default(), 
+                width_prediction_params: Default::default()
             });
 
             let height = img.height();

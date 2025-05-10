@@ -72,8 +72,8 @@ pub fn get_width_from_bucket(bucket: usize) -> f32 {
         0 => 2.5,
         1 => 4.5,
         2 => 6.3,
-        3 => 8.,
-        4 => 12.,
+        3 => 8.5,
+        4 => 12.7,
         5 => 16.,
         6 => 20.,
         7 => 24.,
@@ -145,7 +145,7 @@ pub fn get_lf_context_bucket(
     //let bucket = 0;
     //let prediction = 0;
 
-    (bucket, 0 as i32)
+    (bucket, prediction as i32)
 }
 
 pub fn get_hf_context_bucket(
@@ -170,7 +170,7 @@ pub fn get_hf_context_bucket(
         value_prediction_params[0]
     };
 
-    let width_prediction_params_layer = if current_depth < depth {
+    let width_prediction_params_layer = if current_depth < depth - 2 {
         width_prediction_params[2]
     } else if current_depth == depth - 2 {
         width_prediction_params[1]

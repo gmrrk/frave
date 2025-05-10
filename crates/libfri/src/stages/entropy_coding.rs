@@ -35,6 +35,7 @@ pub struct AnsContext {
     pub cdf: [u32; ALPHABET_SIZE],
     pub freqs_to_enc_symbols: Vec<B64RansEncSymbol>,
     pub freqs_to_dec_symbols: HashMap<u32, B64RansDecSymbol>,
+    pub off_distribution_values: Vec<u16>,
     pub max_freq_bits: u32,
 }
 
@@ -46,6 +47,7 @@ impl AnsContext {
             symbols: (0..ALPHABET_SIZE).map(|x| x as u32).collect(),
             freqs_to_enc_symbols: Vec::new(),
             freqs_to_dec_symbols: HashMap::new(),
+            off_distribution_values: Vec::new(),
             max_freq_bits: 0,
         }
     }
@@ -80,14 +82,13 @@ impl AnsContext {
     fn fill_with_laplace(&mut self, bucket: usize) {
         let width = get_width_from_bucket(bucket);
         for (j, freq) in self.freqs.iter_mut().enumerate() {
-            //if j == 0 {
-            //    continue;
-            //}
             let laplace_value = (laplace_distribution(utils::unpack_signed(j as u32) as f32, 0., width) * (1<<self.max_freq_bits) as f32) as u32;
-            if *freq != 0 && laplace_value == 0 {
-                if bucket == 0 {
-                    dbg!(j);
-                }
+            if laplace_value == 0 && *freq == 0 && self.off_distribution_values.contains(&(j as u16)) {
+                *freq = 1;
+            }
+            else if *freq != 0 && laplace_value == 0 {
+                *freq = 1;
+                self.off_distribution_values.push(j as u16);
             } else {
                *freq = laplace_value;
             }

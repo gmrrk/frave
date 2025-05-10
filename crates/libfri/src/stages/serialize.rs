@@ -95,12 +95,13 @@ pub fn encode(mut image: CompressedImage) -> Result<Vec<u8>, SerializeError> {
             serial.extend_from_slice(
                 &(ctx.max_freq_bits).to_le_bytes(),
             );
-            //serial.extend_from_slice(
-            //    &ctx.freqs
-            //        .iter()
-            //        .flat_map(|s| s.to_le_bytes())
-            //        .collect::<Vec<u8>>(),
-            //);
+            serial.extend_from_slice(&(ctx.off_distribution_values.len().to_le_bytes()));
+            serial.extend_from_slice(
+                &ctx.off_distribution_values
+                    .iter()
+                    .flat_map(|s| s.to_le_bytes())
+                    .collect::<Vec<u8>>(),
+            );
         }
         serial.extend_from_slice(Segments::DAT);
         serial.extend_from_slice(&data.len().to_le_bytes());
@@ -213,19 +214,23 @@ fn deserialize_channel_data(
             Segments::EHD => {
                 offset += 2;
 
-                let hist_len = u32::from_le_bytes(bytes[offset..offset + 4].try_into()?);
+                let max_freq_bits = u32::from_le_bytes(bytes[offset..offset + 4].try_into()?);
                 offset += 4;
 
-                //let freqs: Vec<u32> = bytes[offset..offset + hist_len]
-                //    .chunks_exact(4)
-                //    .map(|e| u32::from_le_bytes(e.try_into().unwrap()))
-                //    .collect();
-                //
-                //offset += hist_len;
+                let off_distribution_len = usize::from_le_bytes(bytes[offset..offset + 8].try_into()?);
+                offset += 8;
+
+                let off_distribution_vals: Vec<u16> = bytes[offset..offset + off_distribution_len as usize * 2]
+                    .chunks_exact(2)
+                    .map(|e| u16::from_le_bytes(e.try_into().unwrap()))
+                    .collect();
+
+                offset += off_distribution_len as usize * 2;
 
                 let mut context = AnsContext::new();
 
-                context.max_freq_bits = hist_len;
+                context.max_freq_bits = max_freq_bits;
+                context.off_distribution_values = off_distribution_vals;
                 //context.freqs = (*freqs.into_boxed_slice()).try_into().unwrap();
                 context.finalize_context(true, ans_contexts.len());
                 ans_contexts.push(context)

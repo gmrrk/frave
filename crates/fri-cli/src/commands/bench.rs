@@ -17,6 +17,8 @@ pub fn benchmark(cmd: BenchCommand) {
     fs::create_dir_all("./output").unwrap(); 
     let mut compression_rates: Vec<f32> = vec![];
     let mut compression_rates_png: Vec<f32> = vec![];
+    let mut bpps_frif: Vec<f32> = vec![];
+    let mut bpps_png: Vec<f32> = vec![];
     for path in paths {
         let mut img_path = path.unwrap().path();
         let original_path = img_path.clone();
@@ -46,14 +48,20 @@ pub fn benchmark(cmd: BenchCommand) {
         let result = encoder.encode(data, height, width, frifcolor).unwrap_or_else(|e| panic!("Cannot encode {}, reason: {}", img_path.file_name().unwrap().to_str().unwrap(), e));
 
         let compression_rate = (uncompressed_size as f32 - (result.len()) as f32)/uncompressed_size as f32 * 100.;
+        let frif_bpp = result.len() as f32 / (height* width) as f32 * 8.;
+        let png_bpp = png_size as f32 / (height* width) as f32* 8.;
         let png_compression_rate = (uncompressed_size as f32 - png_size as f32)/uncompressed_size as f32 * 100.;
         println!("FILE {}", img_path.file_name().unwrap().to_str().unwrap());
         println!("Before compression size: {}", uncompressed_size);
         println!("After compression size: {}", result.len());
         println!("Compression rate: {}%", compression_rate);
+        println!("FRIF bits per pixel: {}", frif_bpp);
+        println!("PNG bits per pixel: {}", png_bpp);
         img_path.set_extension("frif");
         compression_rates.push(compression_rate);
         compression_rates_png.push(png_compression_rate);
+        bpps_frif.push(frif_bpp);
+        bpps_png.push(png_bpp);
 
         if false {
             fs::write(&img_path, &result).unwrap_or_else(|e| panic!("Failed to encode frv image: {e}"));
@@ -99,9 +107,14 @@ pub fn benchmark(cmd: BenchCommand) {
 
     let avg_compression_rate = compression_rates.iter().sum::<f32>() / compression_rates.len() as f32;
     let avg_png_compression_rate = compression_rates_png.iter().sum::<f32>() / compression_rates_png.len() as f32;
+
+    let avg_bpp_frif = bpps_frif.iter().sum::<f32>() / compression_rates.len() as f32;
+    let avg_bpp_png = bpps_png.iter().sum::<f32>() / compression_rates_png.len() as f32;
     println!("====SUMMARY====");
     println!("AVG PNG compression rate: {}%", avg_png_compression_rate);
-    println!("AVG compression rate: {}%", avg_compression_rate);
+    println!("AVG PNG bpp: {}", avg_bpp_png);
+    println!("AVG FRIF compression rate: {}%", avg_compression_rate);
+    println!("AVG FRIF bpp: {}", avg_bpp_frif);
 
 }
 

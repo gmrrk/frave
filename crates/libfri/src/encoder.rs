@@ -58,8 +58,8 @@ pub enum EncoderQuality {
 pub struct EncoderOpts {
    pub quality: EncoderQuality,
    pub emit_coefficients: bool,
-   pub value_prediction_params: [Vec<[f32; 6]>; 3],
-   pub width_prediction_params: [Vec<[f32; 6]>; 3],
+   pub value_prediction_params: [Vec<[f32; 6]>; 4],
+   pub width_prediction_params: [Vec<[f32; 6]>; 4],
    pub verbose: bool,
 }
 
@@ -72,16 +72,8 @@ impl Default for EncoderOpts {
         Self {
             emit_coefficients: false,
             quality: EncoderQuality::Lossless,
-            value_prediction_params: [
-                vec![[1./6.;6];3],
-                vec![[1./6.;6];3],
-                vec![[1./6.;6];3]
-            ],
-            width_prediction_params: [
-                vec![],
-                vec![],
-                vec![]
-            ],
+            value_prediction_params: Default::default(),
+            width_prediction_params: Default::default(),
             verbose: false,
         }
     }

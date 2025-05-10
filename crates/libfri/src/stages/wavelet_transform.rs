@@ -295,7 +295,6 @@ fn get_hf_context_bucket(
                     0
                 } else {
                     println!("out of bounds {} {}", pos, parent_level);
-                    //dbg!(&fractal.position_map[parent_level]);
                     0
                 }
             } else {
@@ -505,6 +504,7 @@ impl WaveletImage {
 
     fn scan_level(
         level: u8,
+        depth: u8,
         center: Complex<i32>,
         global_position_map: &HashMap<Complex<i32>, Complex<i32>>,
         min_real: i32,
@@ -532,7 +532,7 @@ impl WaveletImage {
 
         while (global_position_map.contains_key(&first)) {
             last_seen = first;
-            if level != 7 {
+            if depth - level != 2 {
                 first += rev_row_dir;
             } else {
                 if layer_seven_mod % 2 == 0 {
@@ -571,7 +571,7 @@ impl WaveletImage {
                 first = last_seen;
                 break;
             } else {
-                if level != 7 {
+                if depth - level != 2 {
                     first += rev_row_dir;
                 } else {
                     if layer_seven_mod % 2 == 0 {
@@ -616,7 +616,7 @@ impl WaveletImage {
                 scan += col_dir;
             }
 
-            if level != 7 {
+            if depth - level != 2 {
                 first += row_dir;
             } else {
                 if layer_seven_mod % 2 == 0 {
@@ -690,6 +690,7 @@ impl WaveletImage {
         for level in (0..BASE_FRAC_DEPTH) {
             let plane = Self::scan_level(
                 level,
+                depth,
                 center,
                 &global_position_map[level as usize],
                 min_real,
