@@ -19,7 +19,7 @@ impl EncoderStage {
     fn forward(self, encoder_options: &mut EncoderOpts) -> EncoderStage {
         match self {
             EncoderStage::RawImage(data) => EncoderStage::ChannelTransform(data),
-            EncoderStage::ChannelTransform(data) => match channel_transform::encode(data) {
+            EncoderStage::ChannelTransform(data) => match channel_transform::encode(data, encoder_options) {
                 Ok(result) => EncoderStage::WaveletTransform(result),
                 Err(reason) => EncoderStage::Failure(reason),
             },
@@ -27,7 +27,7 @@ impl EncoderStage {
                 Ok(result) => EncoderStage::Quantization(result),
                 Err(reason) => EncoderStage::Failure(reason),
             },
-            EncoderStage::Quantization(data) => match quantization::encode(data) {
+            EncoderStage::Quantization(data) => match quantization::encode(data, encoder_options) {
                 Ok(result) => EncoderStage::Prediction(result),
                 Err(reason) => EncoderStage::Failure(reason),
             },
@@ -57,6 +57,7 @@ pub enum EncoderQuality {
 
 pub struct EncoderOpts {
    pub quality: EncoderQuality,
+   pub quantization_table: [i32; 9],
    pub emit_coefficients: bool,
    pub value_prediction_params: [Vec<[f32; 6]>; 4],
    pub width_prediction_params: [Vec<[f32; 6]>; 4],
@@ -75,6 +76,7 @@ impl Default for EncoderOpts {
             value_prediction_params: Default::default(),
             width_prediction_params: Default::default(),
             verbose: false,
+            quantization_table: [1;9],
         }
     }
 }

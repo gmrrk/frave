@@ -21,7 +21,7 @@ pub fn decode_image(cmd: DecodeCommand) {
         panic!("Failed to open: {e}");
     });
 
-    let decoder = FRIDecoder{};
+    let decoder = FRIDecoder{ quantization_table: [1;9] };
 
     match decoder.decode(data) {
         Ok(result) => {

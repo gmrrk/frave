@@ -82,14 +82,7 @@ impl ContextModeler {
         global_depth: usize,
         channel: usize,
     ) -> (Vec<DVector<f32>>, Vec<DMatrix<f32>>) {
-        let num_ctx_last_layer = wavelet_image.fractal_lattice.len() * (1 << (global_depth - 1));
-        let num_ctx_middle_layer = wavelet_image.fractal_lattice.len() * (1 << (global_depth - 2));
         let num_parameters = 6;
-        //let mut matrices = vec![
-        //    DMatrix::<f32>::zeros(num_ctx_last_layer, num_parameters),
-        //    DMatrix::<f32>::zeros(num_ctx_middle_layer, num_parameters),
-        //    DMatrix::<f32>::zeros(num_ctx_middle_layer, num_parameters),
-        //];
         let mut matrices: Vec<DMatrix<f32>> = (0..BASE_FRAC_DEPTH)
             .map(|level| {
                 DMatrix::<f32>::zeros(
@@ -154,6 +147,7 @@ impl ContextModeler {
                 let gradient_down_horizn = (row[4] - row[5]).abs();
                 let gradient_vert_left = (row[1] - row[5]).abs();
                 let gradient_vert_right = (row[2] - row[4]).abs();
+
                 width_compounds[(i, 0)] = 1.0;
                 width_compounds[(i, 1)] = gradient_horizn;
                 width_compounds[(i, 2)] = gradient_upper_horizn;

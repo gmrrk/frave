@@ -14,7 +14,7 @@ enum DecoderStage {
 }
 
 impl DecoderStage {
-    fn forward(self) -> DecoderStage {
+    fn forward(self, qnt: &[i32 ;9]) -> DecoderStage {
         match self {
             DecoderStage::EncodedImage(data) => match serialize::decode(data) {
                 Ok(result) => DecoderStage::EntropyDecoding(result),
@@ -24,7 +24,7 @@ impl DecoderStage {
                 Ok(result) => DecoderStage::Dequantization(result),
                 Err(reason) => DecoderStage::Failure(reason),
             },
-            DecoderStage::Dequantization(data) => match quantization::decode(data) {
+            DecoderStage::Dequantization(data) => match quantization::decode(data, qnt) {
                 Ok(result) => DecoderStage::WaveletTransform(result),
                 Err(reason) => DecoderStage::Failure(reason),
             },
@@ -42,13 +42,14 @@ impl DecoderStage {
 }
 
 pub struct FRIDecoder {
+   pub quantization_table: [i32; 9],
 }
 
 impl FRIDecoder {
     pub fn decode(self, data: Vec<u8>) -> Result<RasterImage, String> {
         let mut stage = DecoderStage::EncodedImage(data);
         while !matches!(stage, DecoderStage::RawImage(_) | DecoderStage::Failure(_)) {
-            stage = stage.forward();
+            stage = stage.forward(&self.quantization_table);
         }
 
         match stage {

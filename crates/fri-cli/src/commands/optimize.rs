@@ -1,7 +1,7 @@
-use core::fmt;
+use core::{f32, fmt};
 use std::fs;
 use std::fs::File;
-use std::io::{BufWriter, BufRead, BufReader, Read};
+use std::io::{BufRead, BufReader, BufWriter, Read};
 use std::path::PathBuf;
 
 use libfri::decoder::FRIDecoder;
@@ -12,127 +12,116 @@ pub struct OptimizeCommand {
     pub dataset_path: PathBuf,
 }
 
-
-fn find_arrays(arr: &mut Vec<f32>, n: usize, sum: f32, results: &mut Vec<Vec<f32>>, min_val: f32, max_val: f32) {
-    if arr.len() == n {
-        if sum == 0. {
-            results.push(arr.clone());
-        }
-        return;
-    }
-
-    // Trying each value from min_val to max_val
-    for i in min_val as i32..=max_val as i32 {
-        if i as f32 <= sum {
-            arr.push(i as f32);
-            find_arrays(arr, n, sum - i as f32, results, min_val, max_val);
-            arr.pop();
-        }
-    }
+fn loss_with_quant(length: usize, mse: f32) -> f32 {
+    let x = length as f32 / 1000.;
+    (x*x) * (mse +1.).sqrt().sqrt()
 }
 
 pub fn optimize(cmd: OptimizeCommand) {
     let paths = fs::read_dir(cmd.dataset_path).expect(&format!("No such directory"));
     fs::create_dir_all("./output").unwrap();
-    let mut lowest_mse = f32::MAX;
-
-    let coef_set = [
-        [1./6., 1./6., 1./6., 1./6., 1./6., 1./6.],
-    ];
-
-    let n = 6;
-    let target_sum = 6.;
-
-    let mut results: Vec<Vec<f32>> = Vec::new();
-    let mut current_vec: Vec<f32> = Vec::new();
-    let min_val: f32 = -3.;
-    let max_val: f32 = 3.;
-
-    find_arrays(&mut current_vec, n, target_sum, &mut results, min_val, max_val);
-
-    for arr in results.iter_mut() {
-        arr[0] = arr[0] / 6.;
-        arr[1] = arr[1] / 6.;
-        arr[2] = arr[2] / 6.;
-        arr[3] = arr[3] / 6.;
-        arr[4] = arr[4] / 6.;
-        arr[5] = arr[5] / 6.;
-    }
-    //dbg!(results);
-
-    let mut best_coef: [f32; 6] = [0.;6];
+    let mut quant_table = [1; 9];
 
     for (i, path) in paths.enumerate() {
-        if i == 6 {
-        let img_path = path.unwrap().path();
-        for (j, coefs) in results.iter().enumerate() {
+        if i != 0 {
+            let img_path = path.unwrap().path();
+            dbg!(&img_path);
             let img = match image::open(&img_path) {
                 Ok(data) => data,
                 Err(_) => continue,
             };
-            println!("Iter: {}", j);
+            for j in (0..9).rev().chain(1..9) {
+                let mut min_loss: f32 = f32::MAX;
+                println!("Optimizing {} position", j);
+                for k in 1..32 {
+                    let mut enc_qnt_table = quant_table.clone();
+                    enc_qnt_table[j] = k;
 
-            let encoder = FRIEncoder::new(EncoderOpts {
-                quality: libfri::encoder::EncoderQuality::Lossless,
-                emit_coefficients: false,
-                verbose: false,
-                value_prediction_params: Default::default(), 
-                width_prediction_params: Default::default()
-            });
+                    let encoder = FRIEncoder::new(EncoderOpts {
+                        quality: libfri::encoder::EncoderQuality::Lossless,
+                        emit_coefficients: false,
+                        verbose: false,
+                        value_prediction_params: Default::default(),
+                        width_prediction_params: Default::default(),
+                        quantization_table: enc_qnt_table,
+                    });
 
-            let height = img.height();
-            let width = img.width();
-            let color = img.color();
-            let data = img.into_bytes();
+                    let c_img = img.clone();
 
-            let frifcolor = match color {
-                image::ColorType::L8 => libfri::images::ColorSpace::Luma,
-                image::ColorType::Rgb8 => libfri::images::ColorSpace::RGB,
-                _ => panic!("Unsupported color scheme for frif image, expected rgb8 or luma8"),
-            };
-            let result = encoder
-                .encode(data, height, width, frifcolor)
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "Cannot encode {}, reason: {}",
-                        img_path.file_name().unwrap().to_str().unwrap(),
-                        e
-                    )
-                });
+                    let height = c_img.height();
+                    let width = c_img.width();
+                    let color = c_img.color();
+                    let data = c_img.into_bytes();
 
-            let mut errors: Vec<i32> = Vec::new();
+                    let frifcolor = match color {
+                        image::ColorType::L8 => libfri::images::ColorSpace::Luma,
+                        image::ColorType::Rgb8 => libfri::images::ColorSpace::RGB,
+                        _ => panic!(
+                            "Unsupported color scheme for frif image, expected rgb8 or luma8"
+                        ),
+                    };
+                    let result = encoder
+                        .encode(data, height, width, frifcolor)
+                        .unwrap_or_else(|e| {
+                            panic!(
+                                "Cannot encode {}, reason: {}",
+                                img_path.file_name().unwrap().to_str().unwrap(),
+                                e
+                            )
+                        });
 
-            for i in 0..3 {
-                let file = File::open(format!("mse/errors_{}.mse", i)).unwrap();
-                let reader = BufReader::new(file);
+                    let compressed_lenght = result.len();
+                    let decoder = FRIDecoder {
+                        quantization_table: enc_qnt_table,
+                    };
+                    match decoder.decode(result) {
+                        Ok(decoded) => {
+                            let img: image::RgbImage = match image::ImageBuffer::from_vec(
+                                decoded.metadata.width as u32,
+                                decoded.metadata.height as u32,
+                                decoded.data,
+                            ) {
+                                Some(buf) => buf,
+                                None => {
+                                    eprintln!("Failed to create image buffer.");
+                                    return;
+                                }
+                            };
 
-                for line in reader.lines() {
-                    let line = line.unwrap();
-                    if let Ok(number) = line.trim().parse::<i32>() {
-                        errors.push(number); }
+                            let mut output_path: PathBuf = PathBuf::from(r"./output/");
+                            output_path.push(img_path.file_name().unwrap());
+                            output_path.set_extension("bmp");
+                            let file = File::create(&output_path).unwrap();
+                            let ref mut w = BufWriter::new(file);
+
+                            img.write_to(w, image::ImageOutputFormat::Bmp)
+                                .expect("Failed to write image");
+
+                            let original_img = match image::open(&img_path) {
+                                Ok(data) => data.into_bytes(),
+                                Err(_) => continue,
+                            };
+                            let decoded_img = img.bytes();
+                            let len = original_img.len() as f32;
+
+                            let mut mse: f32 = 0.;
+                            for (x, y) in decoded_img.into_iter().zip(original_img.into_iter()) {
+                                mse += (x.unwrap() - y).pow(2) as f32;
+                            }
+                            mse = mse / len;
+                            println!("MSE: {}, COMP_LENGTH: {}, LOSS: {}", mse as f32, compressed_lenght, loss_with_quant(compressed_lenght, mse));
+                            if loss_with_quant(compressed_lenght, mse) < min_loss {
+                                quant_table[j] = k;
+                                min_loss = loss_with_quant(compressed_lenght, mse);
+                            }
+                        }
+                        Err(msg) => println!("Cannot decode, reason: {msg}"),
+                    }
                 }
-
-                }
-            let mut errors_sorted = errors.clone();
-            errors_sorted.sort();
-            let median_current = errors_sorted[errors.len()/2];
-            let mse_current = errors.iter().sum::<i32>() as f32 /(errors.len() as f32);
-            dbg!(mse_current);
-            dbg!(median_current);
-            dbg!(coefs);
-            if mse_current < lowest_mse {
-                lowest_mse = mse_current;
-                best_coef = coefs[0..6].try_into().unwrap();
+                println!(" quant {:?}", quant_table);
             }
-
-
-            if false {
-                fs::write(&img_path, &result)
-                    .unwrap_or_else(|e| panic!("Failed to encode frv image: {e}"));
-            }
-        }
+          println!("Best quant {:?}", quant_table);
+          println!("")
         }
     }
-    println!("MSE: {}", lowest_mse);
-    println!("Best coefs {:?}", best_coef);
 }

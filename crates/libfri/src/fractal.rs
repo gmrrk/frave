@@ -65,20 +65,6 @@ pub static LITERALS: [Complex<i32>; 30] =
                 },
             ];
 
-fn try_apply<T: Copy>(
-    first: Option<T>,
-    second: Option<T>,
-    operation: fn(T, T) -> T,
-    default: T,
-) -> Option<T> {
-    match (first, second) {
-        (Some(f), Some(s)) => Some(operation(f, s)),
-        (Some(f), None) => Some(operation(f, default)),
-        (None, Some(s)) => Some(operation(default, s)),
-        (None, None) => None,
-    }
-}
-
 #[derive(Debug)]
 pub struct Fractal {
     pub depth: usize,
@@ -228,52 +214,5 @@ impl Fractal {
         }
     }
 
-    pub fn extract_coefficients(&mut self, raster_image: &RasterImage, depth: usize) {
-        let mut coefficients = [
-            vec![None; 1 << depth],
-            vec![None; 1 << depth],
-            vec![None; 1 << depth],
-        ];
-
-        let mut low_pass_values = [
-            vec![None; 1 << depth],
-            vec![None; 1 << depth],
-            vec![None; 1 << depth],
-        ];
-        for channel in 0..raster_image.metadata.colorspace.num_channels() {
-            for level in (0..depth).rev() {
-                // compute high-pass and low-pass components
-                for pos in 1 << level..1 << (level + 1) {
-                    let (left_coef, right_coef): (Option<i32>, Option<i32>);
-                    if level == depth - 1 {
-                        left_coef = raster_image.get_pixel(
-                            self.image_positions[2 * pos].re,
-                            self.image_positions[2 * pos].im,
-                            channel,
-                        );
-                        right_coef = raster_image.get_pixel(
-                            self.image_positions[2 * pos + 1].re,
-                            self.image_positions[2 * pos + 1].im,
-                            channel,
-                        );
-                    } else {
-                        left_coef = low_pass_values[channel][2 * pos];
-                        right_coef = low_pass_values[channel][2 * pos + 1];
-                    }
-                    coefficients[channel][pos] =
-                        try_apply(left_coef, right_coef, |l, r| (l - r), 0);
-                    low_pass_values[channel][pos] = try_apply(
-                        right_coef,
-                        coefficients[channel][pos],
-                        |l, r| (l + r / 2),
-                        0,
-                    );
-                }
-            }
-            coefficients[channel][0] = low_pass_values[channel][1];
-        }
-        self.values = low_pass_values;
-        self.coefficients = coefficients;
-    }
 }
 

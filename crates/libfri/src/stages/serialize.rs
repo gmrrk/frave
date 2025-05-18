@@ -96,6 +96,11 @@ pub fn encode(mut image: CompressedImage) -> Result<Vec<u8>, SerializeError> {
             serial.extend_from_slice(
                 &(ctx.max_freq_bits).to_le_bytes(),
             );
+            
+            serial.extend_from_slice(
+                &(ctx.width).to_le_bytes(),
+            );
+
             serial.extend_from_slice(&(ctx.off_distribution_values.len().to_le_bytes()));
             serial.extend_from_slice(
                 &ctx.off_distribution_values
@@ -191,6 +196,9 @@ fn deserialize_channel_data(
                 let max_freq_bits = u32::from_le_bytes(bytes[offset..offset + 4].try_into()?);
                 offset += 4;
 
+                let width = f32::from_le_bytes(bytes[offset..offset + 4].try_into()?);
+                offset += 4;
+
                 let off_distribution_len = usize::from_le_bytes(bytes[offset..offset + 8].try_into()?);
                 offset += 8;
 
@@ -204,9 +212,10 @@ fn deserialize_channel_data(
                 let mut context = AnsContext::new();
 
                 context.max_freq_bits = max_freq_bits;
+                context.width = width;
                 context.off_distribution_values = off_distribution_vals;
                 //context.freqs = (*freqs.into_boxed_slice()).try_into().unwrap();
-                context.finalize_context(true, ans_contexts.len());
+                context.finalize_context(false, ans_contexts.len());
                 ans_contexts.push(context)
             }
             Segments::DAT => {

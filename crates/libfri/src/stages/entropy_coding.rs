@@ -38,6 +38,7 @@ pub struct AnsContext {
     pub freqs_to_dec_symbols: HashMap<u32, B64RansDecSymbol>,
     pub off_distribution_values: Vec<u16>,
     pub max_freq_bits: u32,
+    pub width: f32,
 }
 
 impl AnsContext {
@@ -50,6 +51,7 @@ impl AnsContext {
             freqs_to_dec_symbols: HashMap::new(),
             off_distribution_values: Vec::new(),
             max_freq_bits: 0,
+            width: 0.0,
         }
     }
 
@@ -81,7 +83,7 @@ impl AnsContext {
     }
 
     fn fill_with_laplace(&mut self, bucket: usize) {
-        let width = get_width_from_bucket(bucket);
+        let width = self.width; //get_width_from_bucket(bucket);
         for (j, freq) in self.freqs.iter_mut().enumerate() {
             let laplace_value = (laplace_distribution(utils::unpack_signed(j as u32) as f32, 0., width) * (1<<self.max_freq_bits) as f32) as u32;
             if laplace_value == 0 && *freq == 0 && self.off_distribution_values.contains(&(j as u16)) {
@@ -100,21 +102,34 @@ impl AnsContext {
         self.freqs[element as usize] += 1;
     }
 
-    pub fn finalize_context(&mut self, normalize: bool, bucket: usize) {
+    fn estimate_width(&mut self) {
+        let mut data: Vec<_> = vec![];
+        for (j, freq) in self.freqs.iter().enumerate() {
+            let sym = utils::unpack_signed(j as u32);
+            for i in 0..*freq {
+                data.push(sym.abs());
+            }
+        }
+
+        self.width = data.iter().sum::<i32>() as f32 / data.len() as f32;
+    }
+
+    pub fn finalize_context(&mut self, estimate: bool, bucket: usize) {
         if self.max_freq_bits < 8 {
             self.max_freq_bits = 8
         }
+
+        if estimate {
+            self.estimate_width();
+        }
     
+        self.fill_with_laplace(bucket);
+
         if self.freqs.iter().sum::<u32>() as usize == 0 {
             return;
         }
-        self.fill_with_laplace(bucket);
 
-        if normalize {
-            self.cdf = self.normalize_freqs(1 << self.max_freq_bits);
-        } else {
-            self.cdf = self.get_cdf();
-        }
+        self.cdf = self.normalize_freqs(1 << self.max_freq_bits);
         self.max_freq_bits =
             utils::get_prev_power_two(self.freqs.iter().sum::<u32>() as usize).trailing_zeros();
         self.freqs_to_enc_symbols = self.get_freqs_to_enc_symbols();
@@ -254,7 +269,7 @@ fn decode_symbol<const T: usize>(
         .position(|&r| r == cum_freq_decoded)
         .unwrap() as u32;
 
-    while current_context.cdf[symbol as usize] == cum_freq_decoded {
+    while (symbol as usize) < ALPHABET_SIZE && current_context.cdf[symbol as usize] == cum_freq_decoded  {
         symbol += 1;
     }
     symbol -= 1;
