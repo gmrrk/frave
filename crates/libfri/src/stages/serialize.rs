@@ -161,8 +161,8 @@ fn deserialize_channel_data(
     let mut channel_data = [None, None, None];
     let mut ans_contexts: Vec<AnsContext> = vec![];
     let mut encoded_bytes: Vec<u8> = vec![];
-    let mut value_prediction_parameters: Vec<[f32; 6]> = vec![[0.; 6]; BASE_FRAC_DEPTH];
-    let mut width_prediction_parameters: Vec<[f32; 6]> = vec![[0.; 6]; BASE_FRAC_DEPTH];
+    let mut value_prediction_parameters: Vec<[f32; 7]> = vec![[0.; 7]; BASE_FRAC_DEPTH];
+    let mut width_prediction_parameters: Vec<[f32; 7]> = vec![[0.; 7]; BASE_FRAC_DEPTH];
     let mut i = 0;
     loop {
         match &bytes[offset..offset + 2] {
@@ -170,24 +170,24 @@ fn deserialize_channel_data(
                 offset += 2;
 
                 for level in 0..BASE_FRAC_DEPTH {
-                    value_prediction_parameters[level] = bytes[offset..offset + 6 * 4]
+                    value_prediction_parameters[level] = bytes[offset..offset + 7 * 4]
                         .chunks_exact(4)
                         .map(|e| f32::from_le_bytes(e.try_into().unwrap()))
                         .collect::<Vec<_>>()
                         .try_into()
                         .unwrap();
-                    offset += 6 * 4;
+                    offset += 7 * 4;
                 }
 
 
                 for level in 0..BASE_FRAC_DEPTH {
-                    width_prediction_parameters[level] = bytes[offset..offset + 6 * 4]
+                    width_prediction_parameters[level] = bytes[offset..offset + 7 * 4]
                         .chunks_exact(4)
                         .map(|e| f32::from_le_bytes(e.try_into().unwrap()))
                         .collect::<Vec<_>>()
                         .try_into()
                         .unwrap();
-                    offset += 6 * 4;
+                    offset += 7 * 4;
                 }
             }
             Segments::EHD => {
@@ -238,8 +238,8 @@ fn deserialize_channel_data(
                     value_prediction_parameters,
                     width_prediction_parameters,
                 });
-                value_prediction_parameters = vec![[0.; 6]; BASE_FRAC_DEPTH];
-                width_prediction_parameters = vec![[0.; 6]; BASE_FRAC_DEPTH];
+                value_prediction_parameters = vec![[0.; 7]; BASE_FRAC_DEPTH];
+                width_prediction_parameters = vec![[0.; 7]; BASE_FRAC_DEPTH];
                 ans_contexts = vec![];
                 encoded_bytes = vec![];
                 i += 1;

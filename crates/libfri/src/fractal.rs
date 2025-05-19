@@ -157,8 +157,8 @@ impl Fractal {
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[depth as usize].contains_key(&(center + vectors[3]))
-            && global_position_map[depth as usize].contains_key(&(center + Complex::new(1, 1)))
+            && !global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + vectors[3]))
+            && global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + Complex::new(1, 1)))
         {
             center + Complex::new(1, 1)
         } else {
@@ -173,8 +173,8 @@ impl Fractal {
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[depth as usize].contains_key(&(center + vectors[3]))
-            && global_position_map[depth as usize].contains_key(&(center + Complex::new(1, 1)))
+            && !global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + vectors[3]))
+            && global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + Complex::new(1, 1)))
         {
             center + Complex::new(1, 1) + vectors[1]
         } else {
@@ -189,8 +189,8 @@ impl Fractal {
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[depth as usize].contains_key(&(center + vectors[0]))
-            && global_position_map[depth as usize].contains_key(&(center + Complex::new(-1, -1)))
+            && !global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + vectors[0]))
+            && global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + Complex::new(-1, -1)))
         {
             center + Complex::new(-1, -1)
         } else {
@@ -205,8 +205,8 @@ impl Fractal {
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[depth as usize].contains_key(&(center + vectors[0]))
-            && global_position_map[depth as usize].contains_key(&(center + Complex::new(-1, -1)))
+            && !global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + vectors[0]))
+            && global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + Complex::new(-1, -1)))
         {
             center + Complex::new(-1, -1) + vectors[4]
         } else {

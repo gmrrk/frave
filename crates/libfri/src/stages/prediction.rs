@@ -155,16 +155,14 @@ pub fn get_hf_context_bucket(
     parent_fractal_pos: &Complex<i32>,
     fractal_lattice: &HashMap<Complex<i32>, Fractal>,
     global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
-    value_prediction_params: &Vec<[f32; 6]>,
-    width_prediction_params: &Vec<[f32; 6]>,
+    value_prediction_params: &Vec<[f32; 7]>,
+    width_prediction_params: &Vec<[f32; 7]>,
     channel: usize,
 ) -> (usize, i32) {
-    assert!(current_depth > 0);
-
     let depth = fractal_lattice[parent_fractal_pos].depth;
 
-    let value_prediction_params_layer = value_prediction_params[current_depth];
-    let width_prediction_params_layer = width_prediction_params[current_depth]; 
+    let value_prediction_params_layer = value_prediction_params[current_depth+1];
+    let width_prediction_params_layer = width_prediction_params[current_depth+1]; 
 
     let values = ContextModeler::get_neighbour_values(
         image_position,
@@ -173,6 +171,7 @@ pub fn get_hf_context_bucket(
         fractal_lattice,
         global_position_map,
         channel,
+        true,
     );
 
     let width = width_prediction_params_layer[0]
@@ -183,14 +182,15 @@ pub fn get_hf_context_bucket(
         + width_prediction_params_layer[5] * ((values[2] - values[4]).abs() as f32);
 
 
-    let bucket = assign_bucket(width, current_depth);
+    let bucket = assign_bucket(width, current_depth+1);
 
     let prediction = (values[0] as f32) * value_prediction_params_layer[0]
         + (values[1] as f32) * value_prediction_params_layer[1]
         + (values[2] as f32) * value_prediction_params_layer[2]
         + (values[3] as f32) * value_prediction_params_layer[3]
         + (values[4] as f32) * value_prediction_params_layer[4]
-        + (values[5] as f32) * value_prediction_params_layer[5];
+        + (values[5] as f32) * value_prediction_params_layer[5]
+        + (values[6] as f32) * value_prediction_params_layer[6];
 
     (bucket as usize, prediction as i32)
 }
@@ -258,7 +258,7 @@ pub fn encode(
             }
         }
 
-        for level in (1..depth).rev() {
+        for level in (0..depth-1) {
             for (i, image_pos) in sorted_lattice[level as usize].iter().enumerate() {
                 let parent_pos = wavelet_image.global_position_map[level as usize][&image_pos];
                 let fractal = &wavelet_image.fractal_lattice.get(&parent_pos).unwrap();
@@ -277,11 +277,29 @@ pub fn encode(
                         &encoder_opts.width_prediction_params[channel],
                         channel,
                     );
-                    let residual = value - prediction;
-                    mse.push((residual).pow(2));
-                    contexts[channel][bucket].bump_freq(utils::pack_signed(residual));
+
+    
+                    let residual_left = if let Some(left_coef) = fractal.coefficients[channel][2*haar_tree_pos] {
+                        left_coef - prediction
+                    } else {
+                        0
+                    };
+
+                    let residual_right = if let Some(right_coef) = fractal.coefficients[channel][2*haar_tree_pos+1] {
+                        right_coef - prediction
+                    } else {
+                        0
+                    };
+
+                    mse.push((residual_left).pow(2));
+                    mse.push((residual_right).pow(2));
+
+                    contexts[channel][bucket].bump_freq(utils::pack_signed(residual_left));
+                    contexts[channel][bucket].bump_freq(utils::pack_signed(residual_right));
+
                     let mut mut_frac = wavelet_image.fractal_lattice.get_mut(&parent_pos).unwrap();
-                    mut_frac.parameter_predictors[channel][haar_tree_pos] = (bucket, prediction);
+                    mut_frac.parameter_predictors[channel][2*haar_tree_pos] = (bucket, prediction);
+                    mut_frac.parameter_predictors[channel][2*haar_tree_pos+1] = (bucket, prediction);
                 }
             }
         }

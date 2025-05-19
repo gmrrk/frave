@@ -59,8 +59,8 @@ pub struct EncoderOpts {
    pub quality: EncoderQuality,
    pub quantization_table: [i32; 9],
    pub emit_coefficients: bool,
-   pub value_prediction_params: [Vec<[f32; 6]>; 4],
-   pub width_prediction_params: [Vec<[f32; 6]>; 4],
+   pub value_prediction_params: [Vec<[f32; 7]>; 3],
+   pub width_prediction_params: [Vec<[f32; 7]>; 3],
    pub verbose: bool,
 }
 

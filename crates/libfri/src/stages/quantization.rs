@@ -1,8 +1,9 @@
 use crate::{encoder::EncoderOpts, stages::wavelet_transform::WaveletImage, utils};
 
 fn get_quantization_matrix() -> [i32; 9] {
+    return [1;9];
     //return [1, 2, 2, 4, 4, 4, 8, 16, 32];
-    return [1, 2, 3, 3, 4, 5, 7, 8, 7];
+    //return [1, 2, 3, 3, 4, 5, 7, 8, 7];
     //return [1, 2, 2, 3, 4, 6, 9, 31, 31];
 }
 

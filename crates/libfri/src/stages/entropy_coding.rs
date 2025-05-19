@@ -231,8 +231,8 @@ fn decode_symbol<const T: usize>(
     ans_contexts: &Vec<AnsContext>,
     fractal_lattice: &HashMap<Complex<i32>, Fractal>,
     global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
-    value_prediction_params: &Vec<[f32; 6]>,
-    width_prediction_params: &Vec<[f32; 6]>,
+    value_prediction_params: &Vec<[f32; 7]>,
+    width_prediction_params: &Vec<[f32; 7]>,
     decoder: &mut B64RansDecoderMulti<T>,
 ) -> i32 {
     let (bucket, prediction) = if depth == 0 {
