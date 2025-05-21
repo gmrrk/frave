@@ -175,11 +175,11 @@ pub fn get_hf_context_bucket(
     );
 
     let width = width_prediction_params_layer[0]
-        + width_prediction_params_layer[1] * ((values[0] - values[3]).abs() as f32)
-        + width_prediction_params_layer[2] * ((values[1] - values[2]).abs() as f32)
-        + width_prediction_params_layer[3] * ((values[4] - values[5]).abs() as f32)
-        + width_prediction_params_layer[4] * ((values[1] - values[5]).abs() as f32)
-        + width_prediction_params_layer[5] * ((values[2] - values[4]).abs() as f32);
+        + width_prediction_params_layer[1] * ((values[0] - values[4]).abs() as f32)
+        + width_prediction_params_layer[2] * ((values[1] - values[5]).abs() as f32)
+        + width_prediction_params_layer[3] * ((values[2] - values[6]).abs() as f32)
+        + width_prediction_params_layer[4] * ((values[2] - values[1]).abs() as f32)
+        + width_prediction_params_layer[5] * ((values[5] - values[6]).abs() as f32);
 
 
     let bucket = assign_bucket(width, current_depth+1);

@@ -25,22 +25,6 @@ fn try_apply<T: Copy>(
     }
 }
 
-fn get_containing_fractal(
-    pos: &Complex<i32>,
-    level: usize,
-    fractal: &Fractal,
-    fractal_lattice: &HashMap<Complex<i32>, Fractal>,
-) -> Option<Complex<i32>> {
-    for location in fractal.get_neighbour_locations() {
-        if let Some(neighbour) = fractal_lattice.get(&location) {
-            if neighbour.position_map[level].contains_key(&pos) {
-                return Some(location);
-            }
-        }
-    }
-    None
-}
-
 impl RasterImage {
     pub fn from_wavelet(wavelet_image: WaveletImage) -> RasterImage {
         let mut raster = RasterImage {
