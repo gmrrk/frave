@@ -50,7 +50,7 @@ impl AnsContext {
             freqs_to_enc_symbols: Vec::new(),
             freqs_to_dec_symbols: HashMap::new(),
             off_distribution_values: Vec::new(),
-            max_freq_bits: 0,
+            max_freq_bits: 8,
             width: 0.0,
         }
     }
@@ -111,7 +111,7 @@ impl AnsContext {
             }
         }
 
-        self.width = data.iter().sum::<i32>() as f32 / data.len() as f32;
+        self.width = (data.iter().sum::<i32>() as f32 / data.len() as f32).max(1e-3);
     }
 
     pub fn finalize_context(&mut self, estimate: bool, bucket: usize) {
@@ -215,7 +215,6 @@ pub fn encode_symbol(
     let bucket = width;
     let current_context = &ans_contexts[bucket];
     let symbol_map = &current_context.freqs_to_enc_symbols;
-
     (
         symbol_map[utils::pack_signed(value - predicted_value) as usize].clone(),
         bucket,
@@ -371,7 +370,7 @@ pub fn encode(
         encoder.flush_all();
         let data = encoder.data().to_owned();
         let bpp = data.len() as f32 / (image.metadata.width * image.metadata.height) as f32 * 8.;
-        if encoder_opts.verbose {
+        if true || encoder_opts.verbose {
             println!("bits per pixel: {}", bpp);
         }
         channel_data[channel] = Some(ChannelData {

@@ -1,11 +1,10 @@
 use image;
 use std::fs;
-use std::path::PathBuf;
 use std::fs::File;
 use std::io::BufWriter;
+use std::path::PathBuf;
 
 use libfri::decoder::FRIDecoder;
-
 
 #[derive(clap::Args)]
 /// Decodes frave file to bitmap format
@@ -21,11 +20,17 @@ pub fn decode_image(cmd: DecodeCommand) {
         panic!("Failed to open: {e}");
     });
 
-    let decoder = FRIDecoder{ quantization_table: [1;9] };
+    let decoder = FRIDecoder {
+        quantization_table: [None; 9],
+    };
 
     match decoder.decode(data) {
         Ok(result) => {
-           let img: image::RgbImage = match image::ImageBuffer::from_vec(result.metadata.width as u32, result.metadata.height as u32, result.data) {
+            let img: image::RgbImage = match image::ImageBuffer::from_vec(
+                result.metadata.width as u32,
+                result.metadata.height as u32,
+                result.data.into_iter().map(|x| x as u8).collect(),
+            ) {
                 Some(buf) => buf,
                 None => {
                     eprintln!("Failed to create image buffer.");
@@ -36,7 +41,8 @@ pub fn decode_image(cmd: DecodeCommand) {
             let file = File::create(cmd.output).unwrap();
             let ref mut w = BufWriter::new(file);
 
-            img.write_to(w, image::ImageOutputFormat::Bmp).expect("Failed to write image");
+            img.write_to(w, image::ImageOutputFormat::Bmp)
+                .expect("Failed to write image");
         }
         Err(msg) => println!("Cannot decode, reason: {msg}"),
     }

@@ -64,6 +64,10 @@ pub fn encode(mut image: CompressedImage) -> Result<Vec<u8>, SerializeError> {
     let variant = &image.metadata.variant.get_encoding();
     mdat |= variant << 28;
 
+    // quality
+    let quality =  image.metadata.quality as u32;
+    mdat |= quality << 20;
+
     serial.extend_from_slice(&mdat.to_le_bytes());
 
     let mut i = 0;
@@ -140,6 +144,7 @@ pub fn decode(bytes: Vec<u8>) -> Result<CompressedImage, SerializeError> {
 
     let colorspace = ColorSpace::from_encoding((metadata >> 30 & 0b11) as u8)?;
     let variant = FractalVariant::from_encoding((metadata >> 28 & 0b11) as u8)?;
+    let quality = (metadata >> 20 & 0b11111111) as u8;
 
     let channel_data = deserialize_channel_data(&bytes, offset)?;
 
@@ -149,6 +154,7 @@ pub fn decode(bytes: Vec<u8>) -> Result<CompressedImage, SerializeError> {
             width,
             colorspace,
             variant,
+            quality,
         },
         channel_data,
     })

@@ -175,11 +175,11 @@ pub fn get_hf_context_bucket(
     );
 
     let width = width_prediction_params_layer[0]
-        + width_prediction_params_layer[1] * ((values[0] - values[4]).abs() as f32)
-        + width_prediction_params_layer[2] * ((values[1] - values[5]).abs() as f32)
-        + width_prediction_params_layer[3] * ((values[2] - values[6]).abs() as f32)
-        + width_prediction_params_layer[4] * ((values[2] - values[1]).abs() as f32)
-        + width_prediction_params_layer[5] * ((values[5] - values[6]).abs() as f32);
+        + width_prediction_params_layer[1] * ((values[0] - values[3]).abs() as f32)
+        + width_prediction_params_layer[2] * ((values[1] - values[2]).abs() as f32)
+        + width_prediction_params_layer[3] * ((values[4] - values[5]).abs() as f32)
+        + width_prediction_params_layer[4] * ((values[1] - values[5]).abs() as f32)
+        + width_prediction_params_layer[5] * ((values[2] - values[4]).abs() as f32);
 
 
     let bucket = assign_bucket(width, current_depth+1);
@@ -215,14 +215,8 @@ pub fn encode(
     encoder_opts: &mut EncoderOpts,
 ) -> Result<[Vec<AnsContext>; 3], String> {
     let mut contexts: [Vec<AnsContext>; 3] = [vec![], vec![], vec![]];
-    let mut ctx_mod = ContextModeler::new();
     let sorted_lattice = wavelet_image.get_sorted_lattice().clone();
     for channel in 0..wavelet_image.metadata.colorspace.num_channels() {
-        ctx_mod.optimize_parameters(&wavelet_image, channel);
-
-        encoder_opts.value_prediction_params[channel] = ctx_mod.value_predictors[channel].clone();
-        encoder_opts.width_prediction_params[channel] = ctx_mod.width_predictors[channel].clone();
-
         contexts[channel] = vec![AnsContext::new(); CONTEXT_AMOUNT];
         let mut mse: Vec<i32> = vec![];
         let depth = wavelet_image.fractal_lattice[&sorted_lattice[0][0]].depth;
@@ -249,6 +243,7 @@ pub fn encode(
             if let Some(value) = fractal.coefficients[channel][1] {
                 let (bucket, prediction) =
                     get_lf_context_bucket(1, 0, image_pos, &wavelet_image.fractal_lattice, channel);
+
                 let residual = value - prediction;
                 {
                     let mut mut_frac = wavelet_image.fractal_lattice.get_mut(image_pos).unwrap();
@@ -293,7 +288,6 @@ pub fn encode(
 
                     mse.push((residual_left).pow(2));
                     mse.push((residual_right).pow(2));
-
                     contexts[channel][bucket].bump_freq(utils::pack_signed(residual_left));
                     contexts[channel][bucket].bump_freq(utils::pack_signed(residual_right));
 

@@ -10,5 +10,7 @@ itertools = "0.10.5"
 plotters = { version = "0.3.7", features = ["ab_glyph", "fontconfig-dlopen"] }
 clap = { version = "4.0.32", features = ["derive"] }
 image = "0.24.5"
+ssimulacra2 = "0.5.1"
+yuvxyb = "0.4.2"
 
 

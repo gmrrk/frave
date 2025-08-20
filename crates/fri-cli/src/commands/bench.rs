@@ -48,7 +48,7 @@ pub fn benchmark(cmd: BenchCommand) {
         let uncompressed_size = data.len();
 
         let result = encoder
-            .encode(data, height, width, frifcolor)
+            .encode(data, height, width, frifcolor, 100)
             .unwrap_or_else(|e| {
                 panic!(
                     "Cannot encode {}, reason: {}",
@@ -80,15 +80,15 @@ pub fn benchmark(cmd: BenchCommand) {
                 .unwrap_or_else(|e| panic!("Failed to encode frv image: {e}"));
         }
 
-        if true {
-            let decoder = FRIDecoder { quantization_table: [1;9] };
+        if false {
+            let decoder = FRIDecoder { quantization_table: [None;9] };
 
             match decoder.decode(result) {
                 Ok(decoded) => {
                     let img: image::RgbImage = match image::ImageBuffer::from_vec(
                         decoded.metadata.width as u32,
                         decoded.metadata.height as u32,
-                        decoded.data,
+                        decoded.data.into_iter().map(|x| x as u8).collect(),
                     ) {
                         Some(buf) => buf,
                         None => {

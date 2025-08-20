@@ -14,7 +14,7 @@ enum DecoderStage {
 }
 
 impl DecoderStage {
-    fn forward(self, qnt: &[i32 ;9]) -> DecoderStage {
+    fn forward(self, qnt: &[Option<i32> ;9]) -> DecoderStage {
         match self {
             DecoderStage::EncodedImage(data) => match serialize::decode(data) {
                 Ok(result) => DecoderStage::EntropyDecoding(result),
@@ -42,7 +42,7 @@ impl DecoderStage {
 }
 
 pub struct FRIDecoder {
-   pub quantization_table: [i32; 9],
+   pub quantization_table: [Option<i32>; 9],
 }
 
 impl FRIDecoder {

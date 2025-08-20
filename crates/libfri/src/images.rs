@@ -4,7 +4,7 @@ use crate::stages::serialize::SerializeError;
 use crate::stages::wavelet_transform::WaveletImage;
 use num::complex::Complex;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ColorSpace {
     Luma,
     YCbCr,
@@ -70,18 +70,19 @@ pub struct ImageMetadata {
     pub width: u32,
     pub colorspace: ColorSpace,
     pub variant: FractalVariant,
+    pub quality: u8,
 }
 
 impl ImageMetadata {
     pub fn new(height: u32, width: u32) -> Self {
-        ImageMetadata { height, width, colorspace: ColorSpace::RGB, variant: FractalVariant::TameTwindragon }
+        ImageMetadata { height, width, colorspace: ColorSpace::RGB, variant: FractalVariant::TameTwindragon, quality: 100}
     }
 }
 
 #[derive(Clone)]
 pub struct RasterImage {
     pub metadata: ImageMetadata,
-    pub data: Vec<u8>,
+    pub data: Vec<i16>,
 }
 
 impl RasterImage {
@@ -106,7 +107,7 @@ impl RasterImage {
             let num_channels = self.metadata.colorspace.num_channels() as u32;
             // TODO: Add different subsamplings, currently 4:4:4 is supported
             let position = ((y * self.metadata.width + x) * num_channels + channel as u32) as usize;
-            self.data[position] = value.clamp(0, 255) as u8;
+            self.data[position] = value as i16;
         }
     }
 }

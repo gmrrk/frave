@@ -19,7 +19,7 @@ impl EncoderStage {
     fn forward(self, encoder_options: &mut EncoderOpts) -> EncoderStage {
         match self {
             EncoderStage::RawImage(data) => EncoderStage::ChannelTransform(data),
-            EncoderStage::ChannelTransform(data) => match channel_transform::encode(data, encoder_options) {
+            EncoderStage::ChannelTransform(data) => match channel_transform::encode(data) {
                 Ok(result) => EncoderStage::WaveletTransform(result),
                 Err(reason) => EncoderStage::Failure(reason),
             },
@@ -48,16 +48,8 @@ impl EncoderStage {
     }
 }
 
-pub enum EncoderQuality {
-    Low,
-    Medium,
-    High,
-    Lossless,
-}
-
 pub struct EncoderOpts {
-   pub quality: EncoderQuality,
-   pub quantization_table: [i32; 9],
+   pub quantization_table: [Option<i32>; 9],
    pub emit_coefficients: bool,
    pub value_prediction_params: [Vec<[f32; 7]>; 3],
    pub width_prediction_params: [Vec<[f32; 7]>; 3],
@@ -72,11 +64,10 @@ impl Default for EncoderOpts {
     fn default() -> Self {
         Self {
             emit_coefficients: false,
-            quality: EncoderQuality::Lossless,
             value_prediction_params: Default::default(),
             width_prediction_params: Default::default(),
             verbose: false,
-            quantization_table: [1;9],
+            quantization_table: [None;9],
         }
     }
 }
@@ -92,10 +83,11 @@ impl FRIEncoder {
         height: u32,
         width: u32,
         colorspace: ColorSpace,
+        quality: u8,
     ) -> Result<Vec<u8>, String> {
         let image = RasterImage {
-            data,
-            metadata: ImageMetadata{height, width, colorspace, variant: FractalVariant::TameTwindragon}
+            data: data.into_iter().map(|x| x as i16).collect(),
+            metadata: ImageMetadata{height, width, colorspace, variant: FractalVariant::TameTwindragon, quality}
         };
 
         let mut stage = EncoderStage::RawImage(image);

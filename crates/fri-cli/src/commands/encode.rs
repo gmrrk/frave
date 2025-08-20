@@ -11,6 +11,9 @@ pub struct EncodeCommand {
     #[arg(short, default_value_t = String::from("a.frv"))]
     pub output: String,
 
+    #[arg(long, default_value_t = 100)]
+    pub quality: u8,
+
     #[arg(long, default_value_t = false)]
     pub emit_coefficients: bool,
 }
@@ -23,7 +26,6 @@ pub fn encode_image(cmd: EncodeCommand, verbose: bool) {
     let luma_img = img;
     let encoder = FRIEncoder::new(EncoderOpts {
         emit_coefficients: cmd.emit_coefficients,
-        verbose: true,
         ..Default::default() 
     });
 
@@ -39,7 +41,7 @@ pub fn encode_image(cmd: EncodeCommand, verbose: bool) {
     };
     let uncompressed_size = data.len();
 
-    match encoder.encode(data, height, width, frifcolor) {
+    match encoder.encode(data, height, width, frifcolor, cmd.quality) {
         Ok(result) => {
             if verbose {
                 println!("Before compression size: {}", uncompressed_size);

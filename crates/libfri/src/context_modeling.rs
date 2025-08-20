@@ -45,7 +45,6 @@ fn get_fractal_child_positions_adjacent_to(
         let right_neigh_pos = containing_fractal.image_positions[2 * haar_pos + 1];
 
         let haar_current_pos = current_fractal.position_map[depth][&image_position];
-
         let left_current_pos = current_fractal.image_positions[2 * haar_current_pos];
         let right_current_pos = current_fractal.image_positions[2 * haar_current_pos + 1];
 
@@ -60,25 +59,24 @@ fn get_fractal_child_positions_adjacent_to(
             global_position_map,
         );
 
-        let result: Vec<Option<i32>> = [left_neigh_pos, right_neigh_pos]
-            .into_iter()
-            .map(|neigh_pos| {
-                if neighbours_left.contains(&neigh_pos) || neighbours_right.contains(&neigh_pos) {
-                    if let Some(parent_fractal_loc) = global_position_map[depth + 1].get(&neigh_pos)
-                    {
-                        let containing_fractal = &fractal_lattice[parent_fractal_loc];
-                        let haar_pos = containing_fractal.position_map[depth + 1][&neigh_pos];
-                        containing_fractal.coefficients[channel][haar_pos]
-                    } else {
-                        None
-                    }
+        let neigh_pos_fetcher = |neigh_pos| {
+            if neighbours_left.contains(&neigh_pos) || neighbours_right.contains(&neigh_pos) {
+                if let Some(parent_fractal_loc) = global_position_map[depth + 1].get(&neigh_pos) {
+                    let containing_fractal = &fractal_lattice[parent_fractal_loc];
+                    let haar_pos = containing_fractal.position_map[depth + 1][&neigh_pos];
+                    Some(containing_fractal.coefficients[channel][haar_pos].unwrap_or(0))
                 } else {
                     None
                 }
-            })
-            .collect();
+            } else {
+                None
+            }
+        };
 
-        result.try_into().unwrap()
+        [
+            neigh_pos_fetcher(left_neigh_pos),
+            neigh_pos_fetcher(right_neigh_pos),
+        ]
     } else {
         [None, None]
     }
@@ -100,67 +98,73 @@ impl ContextModeler {
         global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
         channel: usize,
         multidimensional: bool,
-    ) -> Vec<i32> {
+    ) -> [i32; 7] {
         let level = current_depth;
         let fractal = &fractal_lattice[parent_fractal_pos];
 
-        let same_level_values: Vec<i32> = vec![
+        let mut same_level_values: [i32; 3] = [0; 3];
+        let mut i = 0;
+
+        for direction in [
             Fractal::get_right(image_position, fractal.depth - level, global_position_map),
             Fractal::get_down_left(image_position, fractal.depth - level, global_position_map),
             Fractal::get_down_right(image_position, fractal.depth - level, global_position_map),
-        ]
-        .iter()
-        .map(|pos| {
-            if let Some(parent_fractal_loc) = global_position_map[level].get(pos) {
+        ] {
+            if let Some(parent_fractal_loc) = global_position_map[level].get(&direction) {
                 let containing_fractal = &fractal_lattice[parent_fractal_loc];
-                let haar_pos = containing_fractal.position_map[level][pos];
-                containing_fractal.coefficients[channel][haar_pos].unwrap_or(0)
+                let haar_pos = containing_fractal.position_map[level][&direction];
+                same_level_values[i] =
+                    containing_fractal.coefficients[channel][haar_pos].unwrap_or(0);
             } else {
-                0
+                same_level_values[i] = 0;
             }
-        })
-        .collect();
+        }
 
-        let mut below_level_fractals: Vec<[Option<i32>;2]> = vec![
+        let mut below_level_values: [i32; 4] = [0; 4];
+        i = 0;
+        for direction in [
             Fractal::get_left(image_position, fractal.depth - level, global_position_map),
-            Fractal::get_up_left(image_position, fractal.depth - level, global_position_map),
             Fractal::get_up_right(image_position, fractal.depth - level, global_position_map),
-        ]
-        .into_iter()
-        .map(|neighbour_position| {
-            get_fractal_child_positions_adjacent_to(
+            Fractal::get_up_left(image_position, fractal.depth - level, global_position_map),
+        ] {
+            match get_fractal_child_positions_adjacent_to(
                 image_position,
-                neighbour_position,
+                direction,
                 &fractal,
                 level,
                 fractal_lattice,
                 global_position_map,
                 channel,
-            )
-        })
-        .collect();
-
-        if below_level_fractals[0].iter().all(|x| x.is_none()) {
-            below_level_fractals[0][0] = Some(0);
+            ) {
+                [None, None] => {
+                    below_level_values[i] = 0;
+                    i += 1;
+                }
+                [None, Some(x)] => {
+                    below_level_values[i] = x;
+                    i += 1;
+                }
+                [Some(x), None] => {
+                    below_level_values[i] = x;
+                    i += 1;
+                }
+                [Some(x), Some(y)] => {
+                    below_level_values[i] = x;
+                    below_level_values[i + 1] = y;
+                    i += 2;
+                }
+            }
         }
 
-        if below_level_fractals[1].iter().all(|x| x.is_none()) {
-            below_level_fractals[1][0] = Some(0);
-        }
-
-        if below_level_fractals[2].iter().all(|x| x.is_none()) {
-            below_level_fractals[2][0] = Some(0);
-            below_level_fractals[2][1] = Some(0);
-        }
-
-        let below_level_values: Vec<i32> = below_level_fractals.into_iter().flatten().flatten().collect();
-
-        let mut values: Vec<i32> = below_level_values.into_iter().chain(same_level_values).collect();
-
-        //while values.len() < 7 {
-        //    values.push(0);
-        //}
-        values
+        [
+            below_level_values[0],
+            below_level_values[1],
+            below_level_values[2],
+            below_level_values[3],
+            same_level_values[0],
+            same_level_values[1],
+            same_level_values[2],
+        ]
     }
 
     fn get_image_neighbour_matrices(
@@ -205,7 +209,6 @@ impl ContextModeler {
         }
 
         for level in (0..global_depth - 1) {
-            let mut counter = [0; 7];
             for (i, image_pos) in sorted_lattice[level as usize].iter().enumerate() {
                 let parent_pos = &wavelet_image.global_position_map[level as usize][&image_pos];
                 let fractal = &wavelet_image.fractal_lattice.get(parent_pos).unwrap();
@@ -222,11 +225,6 @@ impl ContextModeler {
                         channel,
                         true,
                     );
-                    //dbg!(vals.len());
-                    //if vals.len() == 7 {
-                    //    dbg!(level, image_pos);
-                    //}
-                    counter[vals.len()-1] +=1;
                     value_vectors[level as usize + 1][2 * i] =
                         fractal.coefficients[channel][2 * haar_tree_pos].unwrap_or(0) as f32;
                     value_vectors[level as usize + 1][2 * i + 1] =
@@ -238,7 +236,6 @@ impl ContextModeler {
                     }
                 }
             }
-            println!("LVL {} CNT: {:?}", level, counter);
         }
 
         (value_vectors, matrices)

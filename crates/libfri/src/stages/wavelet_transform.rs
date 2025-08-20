@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::vec;
 
+use crate::context_modeling::ContextModeler;
 use crate::encoder::EncoderOpts;
 use crate::fractal::{self, Fractal, BASE_FRAC_DEPTH, LITERALS};
 use crate::images::{ImageMetadata, RasterImage};
@@ -152,7 +153,7 @@ impl WaveletImage {
             fractal.extract_coefficients(&raster_image, fractal.depth);
         }
         fractal_lattice
-            .retain(|_, frac| frac.coefficients.iter().all(|channel| channel[0].is_some()));
+            .retain(|_, frac| frac.coefficients.iter().any(|channel| channel[0].is_some()));
 
         let global_position_map = Self::get_global_position_map(&fractal_lattice);
         let sorted_lattice = Self::sort_lattice(
@@ -446,9 +447,18 @@ impl WaveletImage {
 
 pub fn encode(
     raster_image: RasterImage,
-    _encoder_opts: &EncoderOpts,
+    encoder_opts: &mut EncoderOpts,
 ) -> Result<WaveletImage, String> {
-    Ok(WaveletImage::from_raster(raster_image))
+    let wavelet_image = WaveletImage::from_raster(raster_image);
+    let mut ctx_mod = ContextModeler::new();
+    let sorted_lattice = wavelet_image.get_sorted_lattice().clone();
+    for channel in 0..wavelet_image.metadata.colorspace.num_channels() {
+        ctx_mod.optimize_parameters(&wavelet_image, channel);
+
+        encoder_opts.value_prediction_params[channel] = ctx_mod.value_predictors[channel].clone();
+        encoder_opts.width_prediction_params[channel] = ctx_mod.width_predictors[channel].clone();
+    }
+    Ok(wavelet_image)
 }
 
 pub fn decode(wavelet_image: WaveletImage) -> Result<RasterImage, String> {
