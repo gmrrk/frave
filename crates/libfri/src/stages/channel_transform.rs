@@ -53,8 +53,8 @@ fn y_cb_cr_lossless_transform(mut image: RasterImage) -> Result<RasterImage, Str
             let cr = r - g; 
 
             image.set_pixel(i as i32, j as i32, y as i32, 0);
-            image.set_pixel(i as i32, j as i32, cb as i32, 1);
-            image.set_pixel(i as i32, j as i32, cr as i32, 2);
+            image.set_pixel(i as i32, j as i32, cb, 1);
+            image.set_pixel(i as i32, j as i32, cr, 2);
         }
     }
 
@@ -70,8 +70,8 @@ fn y_cb_cr_lossless_transform_reverse(mut image: RasterImage) -> Result<RasterIm
             let cr = image.get_pixel(i as i32, j as i32, 2).unwrap_or(0);
 
             let g = (y as f32 - ((cb + cr) as f32/4.).floor()) as i32;
-            let r = cr + g as i32;
-            let b = cb + g as i32;
+            let r = cr + g;
+            let b = cb + g;
 
             image.set_pixel(i as i32, j as i32, r, 0);
             image.set_pixel(i as i32, j as i32, g, 1);
@@ -106,7 +106,7 @@ fn reverse_center_values(mut image: RasterImage) -> RasterImage {
     image
 }
 
-pub fn encode(mut image: RasterImage) -> Result<RasterImage, String> {
+pub fn encode(image: RasterImage) -> Result<RasterImage, String> {
     if image.metadata.colorspace == ColorSpace::Luma {
         return Ok(image)
     }
@@ -118,7 +118,7 @@ pub fn encode(mut image: RasterImage) -> Result<RasterImage, String> {
     }
 }
 
-pub fn decode(mut image: RasterImage) -> Result<RasterImage, String> {
+pub fn decode(image: RasterImage) -> Result<RasterImage, String> {
     if image.metadata.colorspace == ColorSpace::Luma {
         return Ok(image)
     }

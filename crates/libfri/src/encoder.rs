@@ -48,6 +48,7 @@ impl EncoderStage {
     }
 }
 
+#[derive(Default)]
 pub struct EncoderOpts {
    pub quantization_table: [Option<i32>; 9],
    pub emit_coefficients: bool,
@@ -60,17 +61,6 @@ pub struct FRIEncoder {
     opts: EncoderOpts,
 }
 
-impl Default for EncoderOpts {
-    fn default() -> Self {
-        Self {
-            emit_coefficients: false,
-            value_prediction_params: Default::default(),
-            width_prediction_params: Default::default(),
-            verbose: false,
-            quantization_table: [None;9],
-        }
-    }
-}
 
 impl FRIEncoder {
     pub fn new(opts: EncoderOpts) -> FRIEncoder {
@@ -97,7 +87,7 @@ impl FRIEncoder {
 
         match stage {
             EncoderStage::SerializedImage(image) => Ok(image),
-            EncoderStage::Failure(msg) => Err(String::from("Failed to decode: ".to_owned() + &msg)),
+            EncoderStage::Failure(msg) => Err("Failed to decode: ".to_owned() + &msg),
             _ => unreachable!(),
         }
     }

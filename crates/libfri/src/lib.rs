@@ -1,5 +1,3 @@
-#![allow(warnings)]
-
 pub mod encoder;
 pub mod decoder;
 pub mod images;

@@ -1,39 +1,38 @@
+use std::array;
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 
-use num::pow::Pow;
-use num::{Complex, PrimInt};
+use num::Complex;
 
 use crate::context_modeling::ContextModeler;
 use crate::encoder::EncoderOpts;
-use crate::fractal::Fractal;
+use crate::fractal::{Fractal, BASE_FRAC_DEPTH};
 use crate::stages::entropy_coding::AnsContext;
 use crate::stages::wavelet_transform::WaveletImage;
-use crate::{fractal, utils};
+use crate::utils;
 
 pub const CONTEXT_AMOUNT: usize = 90;
 
 fn emit_coefficients(data: &[u32], ctx_id: usize, ctx_channel: usize) {
     std::fs::create_dir_all("./coefficients").unwrap();
     let mut f = File::create(format!(
-        "coefficients/{}_context_{}.coef",
-        ctx_channel, ctx_id
+        "coefficients/{ctx_channel}_context_{ctx_id}.coef"
     ))
     .expect("Unable to create coef file");
 
     for i in data {
-        write!(f, "{}\n", i).unwrap();
+        writeln!(f, "{i}").unwrap();
     }
 }
 
 fn emit_mse(mse: &Vec<i32>, ctx_channel: usize) {
     std::fs::create_dir_all("./mse").unwrap();
-    let mut f = File::create(format!("mse/errors_{}.mse", ctx_channel))
+    let mut f = File::create(format!("mse/errors_{ctx_channel}.mse"))
         .expect("Unable to create coef file");
     for i in mse {
-        write!(f, "{}\n", i).unwrap();
+        writeln!(f, "{i}").unwrap();
     }
 }
 
@@ -45,7 +44,7 @@ fn get_containing_fractal(
 ) -> Option<Complex<i32>> {
     for location in fractal.get_neighbour_locations() {
         if let Some(neighbour) = fractal_lattice.get(&location) {
-            if neighbour.position_map[level].contains_key(&pos) {
+            if neighbour.position_map[level].contains_key(pos) {
                 return Some(location);
             }
         }
@@ -55,7 +54,7 @@ fn get_containing_fractal(
 
 pub fn assign_bucket(width: f32, level: usize) -> usize {
     match width as u32 {
-        0..3 => level * 10 + 0,
+        0..3 => level * 10,
         3..5 => level * 10 + 1,
         5..6 => level * 10 + 2,
         6..8 => level * 10 + 3,
@@ -68,21 +67,21 @@ pub fn assign_bucket(width: f32, level: usize) -> usize {
     }
 }
 
-pub fn get_width_from_bucket(bucket: usize) -> f32 {
-    match bucket % 10 {
-        0 => 2.5,
-        1 => 4.5,
-        2 => 6.3,
-        3 => 8.5,
-        4 => 12.7,
-        5 => 16.,
-        6 => 20.,
-        7 => 24.,
-        8 => 28.,
-        9 => 36.,
-        10.. => 50.
-    }
-}
+//pub fn get_width_from_bucket(bucket: usize) -> f32 {
+//    match bucket % 10 {
+//        0 => 2.5,
+//        1 => 4.5,
+//        2 => 6.3,
+//        3 => 8.5,
+//        4 => 12.7,
+//        5 => 16.,
+//        6 => 20.,
+//        7 => 24.,
+//        8 => 28.,
+//        9 => 36.,
+//        10.. => 50.
+//    }
+//}
 
 pub fn get_lf_context_bucket(
     position: usize,
@@ -93,9 +92,8 @@ pub fn get_lf_context_bucket(
 ) -> (usize, i32) {
     let fractal = &fractal_lattice[parent_fractal_pos];
     let position_in_image = fractal.image_positions[position];
-    let global_pos = vec![];
-    let neighbours = vec![
-        Fractal::get_left(
+    let global_pos = array::from_fn(|_| HashMap::new());
+    let neighbours = [Fractal::get_left(
             position_in_image,
             fractal.depth - current_depth,
             &global_pos,
@@ -109,9 +107,8 @@ pub fn get_lf_context_bucket(
             position_in_image,
             fractal.depth - current_depth,
             &global_pos,
-        ),
-    ];
-    let level: usize = current_depth as usize;
+        )];
+    let level: usize = current_depth;
 
     let values: Vec<i32> = neighbours
         .iter()
@@ -132,7 +129,7 @@ pub fn get_lf_context_bucket(
         })
         .collect();
 
-    let width: u32 = (values[0] - values[2]).abs() as u32;
+    let width: u32 = (values[0] - values[2]).unsigned_abs();
 
     let bucket = assign_bucket(width as f32, level);
 
@@ -143,10 +140,8 @@ pub fn get_lf_context_bucket(
     } else {
         values[0] + values[2] - values[1]
     };
-    //let bucket = 0;
-    //let prediction = 0;
 
-    (bucket, prediction as i32)
+    (bucket, prediction)
 }
 
 pub fn get_hf_context_bucket(
@@ -154,13 +149,11 @@ pub fn get_hf_context_bucket(
     current_depth: usize,
     parent_fractal_pos: &Complex<i32>,
     fractal_lattice: &HashMap<Complex<i32>, Fractal>,
-    global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+    global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
     value_prediction_params: &Vec<[f32; 7]>,
     width_prediction_params: &Vec<[f32; 7]>,
     channel: usize,
 ) -> (usize, i32) {
-    let depth = fractal_lattice[parent_fractal_pos].depth;
-
     let value_prediction_params_layer = value_prediction_params[current_depth+1];
     let width_prediction_params_layer = width_prediction_params[current_depth+1]; 
 
@@ -170,8 +163,7 @@ pub fn get_hf_context_bucket(
         parent_fractal_pos,
         fractal_lattice,
         global_position_map,
-        channel,
-        true,
+        channel
     );
 
     let width = width_prediction_params_layer[0]
@@ -192,7 +184,7 @@ pub fn get_hf_context_bucket(
         + (values[5] as f32) * value_prediction_params_layer[5]
         + (values[6] as f32) * value_prediction_params_layer[6];
 
-    (bucket as usize, prediction as i32)
+    (bucket, prediction as i32)
 }
 
 fn get_entropy(histogram: &[u32], total_size: usize) -> f32 {
@@ -221,15 +213,14 @@ pub fn encode(
         let mut mse: Vec<i32> = vec![];
         let depth = wavelet_image.fractal_lattice[&sorted_lattice[0][0]].depth;
 
-        for (i, image_pos) in sorted_lattice[0].iter().enumerate() {
+        for image_pos in sorted_lattice[0].iter() {
             let fractal = &wavelet_image.fractal_lattice.get(image_pos).unwrap();
-            let haar_tree_pos = fractal.position_map[0].get(&image_pos).unwrap();
             if let Some(value) = fractal.coefficients[channel][0] {
                 let (bucket, prediction) =
                     get_lf_context_bucket(0, 0, image_pos, &wavelet_image.fractal_lattice, channel);
                 let residual = value - prediction;
                 {
-                    let mut mut_frac = wavelet_image.fractal_lattice.get_mut(image_pos).unwrap();
+                    let mut_frac = wavelet_image.fractal_lattice.get_mut(image_pos).unwrap();
                     mut_frac.parameter_predictors[channel][0] = (bucket, prediction);
                     contexts[channel][bucket].bump_freq(utils::pack_signed(residual));
                 }
@@ -237,31 +228,29 @@ pub fn encode(
         }
 
         // Second scan -> High frequency coefficient root
-        for (i, image_pos) in sorted_lattice[0].iter().enumerate() {
+        for image_pos in sorted_lattice[0].iter() {
             let fractal = &wavelet_image.fractal_lattice.get(image_pos).unwrap();
-            let haar_tree_pos = fractal.position_map[0].get(&image_pos).unwrap();
             if let Some(value) = fractal.coefficients[channel][1] {
                 let (bucket, prediction) =
                     get_lf_context_bucket(1, 0, image_pos, &wavelet_image.fractal_lattice, channel);
 
                 let residual = value - prediction;
                 {
-                    let mut mut_frac = wavelet_image.fractal_lattice.get_mut(image_pos).unwrap();
+                    let mut_frac = wavelet_image.fractal_lattice.get_mut(image_pos).unwrap();
                     mut_frac.parameter_predictors[channel][1] = (bucket, prediction);
                     contexts[channel][bucket].bump_freq(utils::pack_signed(residual));
                 }
             }
         }
 
-        for level in (0..depth-1) {
-            for (i, image_pos) in sorted_lattice[level as usize].iter().enumerate() {
-                let parent_pos = wavelet_image.global_position_map[level as usize][&image_pos];
+        for level in 0..depth-1 {
+            for image_pos in sorted_lattice[level].iter() {
+                let parent_pos = wavelet_image.global_position_map[level][image_pos];
                 let fractal = &wavelet_image.fractal_lattice.get(&parent_pos).unwrap();
-                let haar_tree_pos = fractal.position_map[level as usize]
-                    .get(&image_pos)
-                    .unwrap()
-                    .clone();
-                if let Some(value) = fractal.coefficients[channel][haar_tree_pos] {
+                let haar_tree_pos = *fractal.position_map[level]
+                    .get(image_pos)
+                    .unwrap();
+                if let Some(_value) = fractal.coefficients[channel][haar_tree_pos] {
                     let (bucket, prediction) = get_hf_context_bucket(
                         *image_pos,
                         level,
@@ -291,7 +280,7 @@ pub fn encode(
                     contexts[channel][bucket].bump_freq(utils::pack_signed(residual_left));
                     contexts[channel][bucket].bump_freq(utils::pack_signed(residual_right));
 
-                    let mut mut_frac = wavelet_image.fractal_lattice.get_mut(&parent_pos).unwrap();
+                    let mut_frac = wavelet_image.fractal_lattice.get_mut(&parent_pos).unwrap();
                     mut_frac.parameter_predictors[channel][2*haar_tree_pos] = (bucket, prediction);
                     mut_frac.parameter_predictors[channel][2*haar_tree_pos+1] = (bucket, prediction);
                 }
@@ -303,7 +292,7 @@ pub fn encode(
         for (i, ctx) in contexts[channel].iter_mut().enumerate() {
             ctx.max_freq_bits =
                 utils::get_prev_power_two(ctx.freqs.iter().sum::<u32>() as usize).trailing_zeros();
-            ctx.finalize_context(true, i);
+            ctx.finalize_context(true);
             if encoder_opts.verbose {
                 println!(
                     "CHANNEL: {}, size: {}, entropy: {}",
@@ -318,7 +307,6 @@ pub fn encode(
             }
         }
     }
-    //dbg!(&ctx_mod);
 
     Ok(contexts)
 }

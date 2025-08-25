@@ -54,7 +54,7 @@ impl FRIDecoder {
 
         match stage {
             DecoderStage::RawImage(result) => Ok(result),
-            DecoderStage::Failure(msg) => Err(String::from("Failed to decode: ".to_owned() + &msg)),
+            DecoderStage::Failure(msg) => Err("Failed to decode: ".to_owned() + &msg),
             _ => unreachable!(),
         }
     }

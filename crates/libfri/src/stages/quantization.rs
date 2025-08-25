@@ -1,9 +1,6 @@
-use num::{
-    traits::{float::FloatCore, real::Real},
-    Signed,
-};
+use num::traits::{float::FloatCore, real::Real};
 
-use crate::{encoder::EncoderOpts, fractal::BASE_FRAC_DEPTH, stages::wavelet_transform::WaveletImage, utils};
+use crate::{encoder::EncoderOpts, fractal::BASE_FRAC_DEPTH, stages::wavelet_transform::WaveletImage};
 
 fn get_quantization_matrix(quality: u8, channel: usize) -> [f32; BASE_FRAC_DEPTH] {
     let quantization_step = 2.0.powf(BASE_FRAC_DEPTH as f32 - 0.5) * (1. + 8. / 2.0.powf(11.)) / (quality as f32 / 50.);
@@ -14,24 +11,24 @@ fn get_quantization_matrix(quality: u8, channel: usize) -> [f32; BASE_FRAC_DEPTH
                 1.0,
                 1.0,
                 1.0,
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 2 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 3 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 5 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 5 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 6 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 6 as f32))).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 2_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 3_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 5_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 5_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 6_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 6_f32)).clamp(1.,255.),
             ]
         } else {
             [
                 1.0,
                 1.0,
                 1.0,
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 3 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 3 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 5 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 5 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 7 as f32))).clamp(1.,255.),
-                (quantization_step / 2.0.powf((BASE_FRAC_DEPTH as f32 + 1. - 7 as f32))).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 3_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 3_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 5_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 5_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 7_f32)).clamp(1.,255.),
+                (quantization_step / 2.0.powf(BASE_FRAC_DEPTH as f32 + 1. - 7_f32)).clamp(1.,255.),
             ]
         }
     }
@@ -70,7 +67,7 @@ pub fn encode(
     mut image: WaveletImage,
     encoder_config: &EncoderOpts,
 ) -> Result<WaveletImage, String> {
-    for (_, fractal) in &mut image.fractal_lattice {
+    for fractal in image.fractal_lattice.values_mut() {
         for (channel, channel_coef) in fractal.coefficients.iter_mut().enumerate() {
             let quantization_matrix =
                 get_quantization_matrix(image.metadata.quality, channel); 
@@ -97,7 +94,7 @@ pub fn decode(
     mut image: WaveletImage,
     quantization_matrix: &[Option<i32>; 9],
 ) -> Result<WaveletImage, String> {
-    for (_, fractal) in &mut image.fractal_lattice {
+    for fractal in image.fractal_lattice.values_mut() {
         for (channel, channel_coef) in fractal.coefficients.iter_mut().enumerate() {
             let quantization_matrix = get_quantization_matrix(image.metadata.quality, channel);
             for level in 0..9 {

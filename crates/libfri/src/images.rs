@@ -1,8 +1,5 @@
-use crate::fractal::LITERALS;
 use crate::stages::entropy_coding::AnsContext;
 use crate::stages::serialize::SerializeError;
-use crate::stages::wavelet_transform::WaveletImage;
-use num::complex::Complex;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ColorSpace {

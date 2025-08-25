@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use num::traits::ToBytes;
 use std::array::TryFromSliceError;
 use std::error::Error;
@@ -7,7 +6,7 @@ use std::mem;
 
 use crate::fractal::BASE_FRAC_DEPTH;
 use crate::images::{ChannelData, ColorSpace, CompressedImage, FractalVariant, ImageMetadata};
-use crate::stages::entropy_coding::{AnsContext, ALPHABET_SIZE};
+use crate::stages::entropy_coding::AnsContext;
 
 #[derive(Debug)]
 pub enum SerializeError {
@@ -22,7 +21,7 @@ impl Display for SerializeError {
         use SerializeError::*;
         let var_name = match self {
             InvalidSignature => write!(f, "Invalid signature for FRIF image."),
-            SliceConversion(e) => write!(f, "Slice from input bytes is malformed: {}", e),
+            SliceConversion(e) => write!(f, "Slice from input bytes is malformed: {e}"),
             InvalidMetadata => write!(f, "Invalid metadata"),
             MalformedImageBytes => write!(f, "Malformed image bytes"),
         };
@@ -123,7 +122,7 @@ pub fn encode(mut image: CompressedImage) -> Result<Vec<u8>, SerializeError> {
     }
 
     serial.extend_from_slice(Segments::EOI);
-    return Ok(serial);
+    Ok(serial)
 }
 
 pub fn decode(bytes: Vec<u8>) -> Result<CompressedImage, SerializeError> {
@@ -208,12 +207,12 @@ fn deserialize_channel_data(
                 let off_distribution_len = usize::from_le_bytes(bytes[offset..offset + 8].try_into()?);
                 offset += 8;
 
-                let off_distribution_vals: Vec<u16> = bytes[offset..offset + off_distribution_len as usize * 2]
+                let off_distribution_vals: Vec<u16> = bytes[offset..offset + off_distribution_len * 2]
                     .chunks_exact(2)
                     .map(|e| u16::from_le_bytes(e.try_into().unwrap()))
                     .collect();
 
-                offset += off_distribution_len as usize * 2;
+                offset += off_distribution_len * 2;
 
                 let mut context = AnsContext::new();
 
@@ -221,7 +220,7 @@ fn deserialize_channel_data(
                 context.width = width;
                 context.off_distribution_values = off_distribution_vals;
                 //context.freqs = (*freqs.into_boxed_slice()).try_into().unwrap();
-                context.finalize_context(false, ans_contexts.len());
+                context.finalize_context(false);
                 ans_contexts.push(context)
             }
             Segments::DAT => {
@@ -230,7 +229,7 @@ fn deserialize_channel_data(
                 let data_len = u64::from_le_bytes(bytes[offset..offset + 8].try_into()?) as usize;
                 offset += 8;
 
-                let data = bytes[offset..offset + data_len as usize].to_vec();
+                let data = bytes[offset..offset + data_len].to_vec();
                 offset += data_len;
 
                 encoded_bytes = data;

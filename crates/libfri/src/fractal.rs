@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use num::complex::Complex;
 
-use crate::images::RasterImage;
 
 //fn get_literals<const N: usize>(d: f32) -> [Complex<f32>; N] {
 //    let base = Complex::new(d / 2., (2. - (d / 2.).powf(2.)).sqrt());
@@ -78,16 +77,16 @@ pub struct Fractal {
 
 impl Fractal {
     pub fn new(depth: usize, center: Complex<i32>) -> Self {
-        let mut position_map = vec![HashMap::new(); depth as usize];
+        let mut position_map = vec![HashMap::new(); depth];
         let mut image_positions = vec![Complex::<i32>::new(0, 0); 1 << (depth + 1)];
         image_positions[0] = center;
         image_positions[1] = center;
         for level in 0..depth {
             for pos in 1 << level..1 << (level + 1) {
-                position_map[level as usize].insert(image_positions[pos], pos);
+                position_map[level].insert(image_positions[pos], pos);
                 image_positions[2 * pos] = image_positions[pos];
                 image_positions[2 * pos + 1] =
-                    image_positions[pos] + LITERALS[(depth - level - 1) as usize];
+                    image_positions[pos] + LITERALS[depth - level - 1];
             }
         }
 
@@ -110,7 +109,7 @@ impl Fractal {
         if depth == 1 {
             let zl = Complex::new(-1, 1);
             let zmd = Complex::new(0, 2);
-            return [zl, zl - zmd, -zmd, -zl, zmd - zl, zmd];
+            [zl, zl - zmd, -zmd, -zl, zmd - zl, zmd]
         } else if depth == 2 {
             let zl = Complex::new(-2, 0);
             let zmd = Complex::new(-0, -2);
@@ -120,22 +119,22 @@ impl Fractal {
             let zmd = Complex::new(-1, -3);
             return [zl, zl - zmd, -zmd, -zl, zmd - zl, zmd];
         } else {
-            let zl = LITERALS[depth as usize];
-            let zmd = LITERALS[depth as usize + 1] + zl;
+            let zl = LITERALS[depth];
+            let zmd = LITERALS[depth + 1] + zl;
 
             return [zl, zl - zmd, -zmd, -zl, zmd - zl, zmd];
         }
     }
 
     pub fn get_neighbour_locations(&self) -> [Complex<i32>; 6] {
-        let vectors = Self::get_nearby_vectors(self.depth as usize);
-        return vectors.map(|x| self.center + x).try_into().unwrap();
+        let vectors = Self::get_nearby_vectors(self.depth);
+        vectors.map(|x| self.center + x).try_into().unwrap()
     }
 
     pub fn get_left(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+        _global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         center + vectors[4]
@@ -144,7 +143,7 @@ impl Fractal {
     pub fn get_right(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+        _global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         center + vectors[1]
@@ -153,12 +152,12 @@ impl Fractal {
     pub fn get_down_left(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+        global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + vectors[3]))
-            && global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + Complex::new(1, 1)))
+            && !global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + vectors[3]))
+            && global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + Complex::new(1, 1)))
         {
             center + Complex::new(1, 1)
         } else {
@@ -169,12 +168,12 @@ impl Fractal {
     pub fn get_down_right(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+        global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + vectors[3]))
-            && global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + Complex::new(1, 1)))
+            && !global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + vectors[3]))
+            && global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + Complex::new(1, 1)))
         {
             center + Complex::new(1, 1) + vectors[1]
         } else {
@@ -185,12 +184,12 @@ impl Fractal {
     pub fn get_up_right(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+        global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + vectors[0]))
-            && global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + Complex::new(-1, -1)))
+            && !global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + vectors[0]))
+            && global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + Complex::new(-1, -1)))
         {
             center + Complex::new(-1, -1)
         } else {
@@ -201,12 +200,12 @@ impl Fractal {
     pub fn get_up_left(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &Vec<HashMap<Complex<i32>, Complex<i32>>>,
+        global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + vectors[0]))
-            && global_position_map[BASE_FRAC_DEPTH - depth as usize].contains_key(&(center + Complex::new(-1, -1)))
+            && !global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + vectors[0]))
+            && global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + Complex::new(-1, -1)))
         {
             center + Complex::new(-1, -1) + vectors[4]
         } else {
