@@ -115,46 +115,67 @@ impl ContextModeler {
                 let haar_pos = containing_fractal.position_map[level][&direction];
                 same_level_values[i] =
                     containing_fractal.coefficients[channel][haar_pos].unwrap_or(0);
-            } else {
-                same_level_values[i] = 0;
-            }
+            } 
         }
 
         let mut below_level_values: [i32; 4] = [0; 4];
         i = 0;
-        for direction in [
-            Fractal::get_left(image_position, fractal.depth - level, global_position_map),
-            Fractal::get_up_right(image_position, fractal.depth - level, global_position_map),
-            Fractal::get_up_left(image_position, fractal.depth - level, global_position_map),
-        ] {
-            match get_fractal_child_positions_adjacent_to(
-                image_position,
-                direction,
-                &fractal,
-                level,
-                fractal_lattice,
-                global_position_map,
-                channel,
-            ) {
-                [None, None] => {
-                    below_level_values[i] = 0;
-                    i += 1;
-                }
-                [None, Some(x)] => {
-                    below_level_values[i] = x;
-                    i += 1;
-                }
-                [Some(x), None] => {
-                    below_level_values[i] = x;
-                    i += 1;
-                }
-                [Some(x), Some(y)] => {
-                    below_level_values[i] = x;
-                    below_level_values[i + 1] = y;
-                    i += 2;
-                }
-            }
+
+        let up_right_neighbour = Fractal::get_up_right(image_position, fractal.depth - level, global_position_map);
+        if let Some(parent_fractal_loc) = global_position_map[level].get(&up_right_neighbour) {
+            let containing_fractal = &fractal_lattice[&parent_fractal_loc];
+            let haar_pos = containing_fractal.position_map[level][&up_right_neighbour];
+            below_level_values[1] = containing_fractal.coefficients[channel][2 * haar_pos].unwrap_or(0);
+            below_level_values[2] = containing_fractal.coefficients[channel][2 * haar_pos + 1].unwrap_or(0);
         }
+
+        let up_left_neighbour = Fractal::get_up_left(image_position, fractal.depth - level, global_position_map);
+        if let Some(parent_fractal_loc) = global_position_map[level].get(&up_left_neighbour) {
+            let containing_fractal = &fractal_lattice[&parent_fractal_loc];
+            let haar_pos = containing_fractal.position_map[level][&up_left_neighbour];
+            below_level_values[0] = containing_fractal.coefficients[channel][2 * haar_pos + 1].unwrap_or(0);
+        }
+
+        let left_neighbour = Fractal::get_left(image_position, fractal.depth - level, global_position_map);
+        if let Some(parent_fractal_loc) = global_position_map[level].get(&left_neighbour) {
+            let containing_fractal = &fractal_lattice[&parent_fractal_loc];
+            let haar_pos = containing_fractal.position_map[level][&left_neighbour];
+            below_level_values[3] = containing_fractal.coefficients[channel][2 * haar_pos].unwrap_or(0);
+        }
+
+        //for direction in [
+        //    Fractal::get_left(image_position, fractal.depth - level, global_position_map),
+        //    Fractal::get_up_right(image_position, fractal.depth - level, global_position_map),
+        //    Fractal::get_up_left(image_position, fractal.depth - level, global_position_map),
+        //] {
+        //    match get_fractal_child_positions_adjacent_to(
+        //        image_position,
+        //        direction,
+        //        &fractal,
+        //        level,
+        //        fractal_lattice,
+        //        global_position_map,
+        //        channel,
+        //    ) {
+        //        [None, None] => {
+        //            below_level_values[i] = 0;
+        //            i += 1;
+        //        }
+        //        [None, Some(x)] => {
+        //            below_level_values[i] = x;
+        //            i += 1;
+        //        }
+        //        [Some(x), None] => {
+        //            below_level_values[i] = x;
+        //            i += 1;
+        //        }
+        //        [Some(x), Some(y)] => {
+        //            below_level_values[i] = x;
+        //            below_level_values[i + 1] = y;
+        //            i += 2;
+        //        }
+        //    }
+        //}
 
         [
             below_level_values[0],
