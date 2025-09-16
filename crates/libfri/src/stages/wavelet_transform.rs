@@ -6,6 +6,7 @@ use crate::context_modeling::ContextModeler;
 use crate::encoder::EncoderOpts;
 use crate::fractal::{Fractal, BASE_FRAC_DEPTH};
 use crate::images::{ImageMetadata, RasterImage};
+use crate::complex_plane::ComplexPlane;
 
 use num::Complex;
 
@@ -35,7 +36,7 @@ impl RasterImage {
             metadata: wavelet_image.metadata,
         };
 
-        for (_center, fractal) in wavelet_image.fractal_lattice.iter() {
+        for fractal in wavelet_image.complex_plane.fractals.iter() {
             raster.extract_values(fractal);
         }
 
@@ -113,16 +114,14 @@ impl Fractal {
             }
             coefficients[channel][0] = low_pass_values[channel][1];
         }
-        self.values = low_pass_values;
         self.coefficients = coefficients;
     }
 }
 
 pub struct WaveletImage {
     pub metadata: ImageMetadata,
-    pub fractal_lattice: HashMap<Complex<i32>, Fractal>,
-    pub global_position_map: [HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
     pub sorted_lattice: [Vec<Complex<i32>>; BASE_FRAC_DEPTH],
+    pub complex_plane: ComplexPlane,
 }
 
 impl WaveletImage {
@@ -140,53 +139,35 @@ impl WaveletImage {
     }
 
     pub fn from_raster(raster_image: RasterImage) -> WaveletImage {
-        let mut fractal_lattice = Self::fractal_divide(
+        let mut fractals = Self::fractal_divide(
             raster_image.metadata.width,
             raster_image.metadata.height,
             BASE_FRAC_DEPTH,
         );
 
-        for (_, fractal) in fractal_lattice.iter_mut() {
+        for fractal in fractals.iter_mut() {
             fractal.extract_coefficients(&raster_image, fractal.depth);
         }
-        fractal_lattice
-            .retain(|_, frac| frac.coefficients.iter().any(|channel| channel[0].is_some()));
+        fractals
+            .retain(|frac| frac.coefficients.iter().any(|channel| channel[0].is_some()));
 
-        let global_position_map = Self::get_global_position_map(&fractal_lattice);
+        let plane = ComplexPlane::new(fractals);
+
         let sorted_lattice = Self::sort_lattice(
-            &fractal_lattice,
-            &global_position_map,
+            &plane,
             raster_image.metadata.height,
             raster_image.metadata.width,
         );
 
         WaveletImage {
+            complex_plane: plane,
             metadata: raster_image.metadata,
-            global_position_map,
-            fractal_lattice,
             sorted_lattice,
         }
     }
 
-    fn get_global_position_map(
-        fractal_lattice: &HashMap<Complex<i32>, Fractal>,
-    ) -> [HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH] {
-
-        let mut position_map = array::from_fn(|_| HashMap::new());
-
-        for (center, frac) in fractal_lattice.iter() {
-            for level in 0..BASE_FRAC_DEPTH {
-                for position in &frac.image_positions[1 << level..(1 << (level + 1))] {
-                    position_map[level].insert(*position, *center);
-                }
-            }
-        }
-
-        position_map
-    }
-
-    fn fractal_divide(width: u32, height: u32, depth: usize) -> HashMap<Complex<i32>, Fractal> {
-        let mut fractal_lattice = HashMap::<Complex<i32>, Fractal>::new();
+    fn fractal_divide(width: u32, height: u32, depth: usize) -> Vec<Fractal> {
+        let mut fractals = HashMap::<Complex<i32>, Fractal>::new();
         let center = Complex::<i32>::new(width as i32 / 2, height as i32 / 2);
         let mut to_add = VecDeque::<Complex<i32>>::new();
         to_add.push_back(center);
@@ -205,20 +186,20 @@ impl WaveletImage {
 
             let fractal = Fractal::new(depth, position);
             for neighbour in fractal.get_neighbour_locations() {
-                if !fractal_lattice.contains_key(&neighbour) && !to_add.contains(&neighbour) {
+                if !fractals.contains_key(&neighbour) && !to_add.contains(&neighbour) {
                     to_add.push_back(neighbour);
                 }
             }
 
-            fractal_lattice.insert(position, fractal);
+            fractals.insert(position, fractal);
         }
 
         while let Some(position) = boundary.pop_front() {
             let boundary_fractal = Fractal::new(depth, position);
-            fractal_lattice.insert(position, boundary_fractal);
+            fractals.insert(position, boundary_fractal);
         }
 
-        fractal_lattice
+        fractals.into_values().collect()
     }
 
     pub fn get_sorted_lattice(&self) -> &[Vec<Complex<i32>>; BASE_FRAC_DEPTH] {
@@ -242,9 +223,8 @@ impl WaveletImage {
 
     fn scan_level(
         level: usize,
-        depth: usize,
         center: Complex<i32>,
-        global_position_map: &HashMap<Complex<i32>, Complex<i32>>,
+        complex_cell_plane: &ComplexPlane,
         min_real: i32,
         max_real: i32,
         min_imag: i32,
@@ -261,16 +241,17 @@ impl WaveletImage {
         let mut first = center;
 
         let mut layer_seven_mod = 0;
-        if !global_position_map.contains_key(&(center + rev_row_dir))
-            && global_position_map.contains_key(&(center + Complex::new(-1, -1)))
+        if BASE_FRAC_DEPTH - level == 2
+            && !complex_cell_plane.is_cell_on_level(center + rev_row_dir, level)
+            && complex_cell_plane.is_cell_on_level(center + Complex::new(-1, -1), level)
         {
             layer_seven_mod = 1;
         }
         let mut last_seen = first;
 
-        while global_position_map.contains_key(&first) {
+        while complex_cell_plane.is_cell_on_level(first, level) {
             last_seen = first;
-            if depth - level != 2 {
+            if BASE_FRAC_DEPTH - level != 2 {
                 first += rev_row_dir;
             } else {
                 if layer_seven_mod % 2 == 0 {
@@ -294,12 +275,12 @@ impl WaveletImage {
             {
                 column_forward += col_dir;
                 column_backward += rev_col_dir;
-                if global_position_map.contains_key(&column_forward) {
+                if complex_cell_plane.is_cell_on_level(column_forward, level) {
                     last_seen = column_forward;
                     empty_column = false;
                     break;
                 }
-                if global_position_map.contains_key(&column_backward) {
+                if complex_cell_plane.is_cell_on_level(column_backward, level) {
                     last_seen = column_backward;
                     empty_column = false;
                     break;
@@ -308,7 +289,7 @@ impl WaveletImage {
             if empty_column {
                 first = last_seen;
                 break;
-            } else if depth - level != 2 {
+            } else if BASE_FRAC_DEPTH - level != 2 {
                 first += rev_row_dir;
             } else {
                 if layer_seven_mod % 2 == 0 {
@@ -327,7 +308,7 @@ impl WaveletImage {
             && first.re >= min_real
         {
             first += rev_col_dir;
-            if global_position_map.contains_key(&first) {
+            if complex_cell_plane.is_cell_on_level(first, level) {
                 last_seen = first;
             }
         }
@@ -339,7 +320,7 @@ impl WaveletImage {
         'outer: loop {
             let mut scan = first;
             loop {
-                if global_position_map.contains_key(&scan) {
+                if complex_cell_plane.is_cell_on_level(scan, level) {
                     plane.push(scan);
                 }
                 if (scan.im > max_imag || scan.im < min_imag)
@@ -350,7 +331,7 @@ impl WaveletImage {
                 scan += col_dir;
             }
 
-            if depth - level != 2 {
+            if BASE_FRAC_DEPTH - level != 2 {
                 first += row_dir;
             } else {
                 if layer_seven_mod % 2 == 0 {
@@ -360,7 +341,7 @@ impl WaveletImage {
                 }
                 layer_seven_mod += 1;
             }
-            while !global_position_map.contains_key(&first) {
+            while !complex_cell_plane.is_cell_on_level(first, level) {
                 first += col_dir;
                 if !Self::is_pos_in_row_boundary(
                     &first, &row_dir, min_real, max_real, min_imag, max_imag,
@@ -368,7 +349,7 @@ impl WaveletImage {
                     break 'outer;
                 }
             }
-            if global_position_map.contains_key(&first) {
+            if complex_cell_plane.is_cell_on_level(first, level) {
                 last_seen = first;
                 while first.im <= max_imag
                     && first.im >= min_imag
@@ -377,7 +358,7 @@ impl WaveletImage {
                 {
                     first += rev_col_dir;
 
-                    if global_position_map.contains_key(&first) {
+                    if complex_cell_plane.is_cell_on_level(first, level) {
                         last_seen = first;
                     }
                 }
@@ -389,51 +370,27 @@ impl WaveletImage {
 
     // TODO: Simplify this logic from hell
     fn sort_lattice(
-        fractal_lattice: &HashMap<Complex<i32>, Fractal>,
-        global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
+        complex_plane: &ComplexPlane,
         height: u32,
         width: u32,
     ) -> [Vec<Complex<i32>>; BASE_FRAC_DEPTH] {
-        let keys: Vec<Complex<i32>> = fractal_lattice.keys().cloned().collect();
-        let depth = fractal_lattice[&keys[0]].depth;
-
-        let min_real = global_position_map[BASE_FRAC_DEPTH - 1]
-            .keys()
-            .min_by_key(|x| x.re)
-            .unwrap()
-            .re;
-        let max_real = global_position_map[BASE_FRAC_DEPTH - 1]
-            .keys()
-            .max_by_key(|x| x.re)
-            .unwrap()
-            .re;
-        let min_imag = global_position_map[BASE_FRAC_DEPTH - 1]
-            .keys()
-            .min_by_key(|x| x.im)
-            .unwrap()
-            .im;
-        let max_imag = global_position_map[BASE_FRAC_DEPTH - 1]
-            .keys()
-            .max_by_key(|x| x.im)
-            .unwrap()
-            .im;
+        let (min_real, min_imag, max_real, max_imag) = complex_plane.get_minmax_coordinates();
 
         let mut sorted_fractalwise: [Vec<Complex<i32>>; BASE_FRAC_DEPTH] = Default::default();
         let center = Complex::<i32>::new(width as i32 / 2, height as i32 / 2);
 
         for level in 0..BASE_FRAC_DEPTH {
-            let plane = Self::scan_level(
+            let plane_order = Self::scan_level(
                 level,
-                depth,
                 center,
-                &global_position_map[level],
+                complex_plane,
                 min_real,
                 max_real,
                 min_imag,
                 max_imag,
             );
-            assert_eq!(plane.len(), fractal_lattice.len() * (1 << level));
-            sorted_fractalwise[level] = plane;
+            assert_eq!(plane_order.len(), complex_plane.fractals.len() * (1 << level));
+            sorted_fractalwise[level] = plane_order;
         }
         sorted_fractalwise
     }

@@ -67,7 +67,7 @@ pub fn encode(
     mut image: WaveletImage,
     encoder_config: &EncoderOpts,
 ) -> Result<WaveletImage, String> {
-    for fractal in image.fractal_lattice.values_mut() {
+    for fractal in image.complex_plane.fractals.iter_mut() {
         for (channel, channel_coef) in fractal.coefficients.iter_mut().enumerate() {
             let quantization_matrix =
                 get_quantization_matrix(image.metadata.quality, channel); 
@@ -94,7 +94,7 @@ pub fn decode(
     mut image: WaveletImage,
     quantization_matrix: &[Option<i32>; 9],
 ) -> Result<WaveletImage, String> {
-    for fractal in image.fractal_lattice.values_mut() {
+    for fractal in image.complex_plane.fractals.iter_mut() {
         for (channel, channel_coef) in fractal.coefficients.iter_mut().enumerate() {
             let quantization_matrix = get_quantization_matrix(image.metadata.quality, channel);
             for level in 0..9 {

@@ -6,3 +6,4 @@ mod stage;
 mod fractal;
 mod stages;
 mod utils;
+mod complex_plane;

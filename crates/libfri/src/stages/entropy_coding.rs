@@ -1,9 +1,8 @@
-use crate::encoder::EncoderOpts;
-use crate::fractal::{Fractal, BASE_FRAC_DEPTH};
+use crate::{complex_plane::ComplexPlane, encoder::EncoderOpts, fractal::{Fractal, BASE_FRAC_DEPTH}};
 use crate::images::{ChannelData, CompressedImage};
 use crate::stages::prediction;
 use crate::stages::wavelet_transform::WaveletImage;
-use crate::utils;
+use crate::{complex_plane, utils};
 
 use core::f32;
 use num::Complex;
@@ -229,27 +228,23 @@ fn decode_symbol<const T: usize>(
     parent_pos: &Complex<i32>,
     channel: usize,
     ans_contexts: &Vec<AnsContext>,
-    fractal_lattice: &HashMap<Complex<i32>, Fractal>,
-    global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
+    complex_plane: &ComplexPlane,
     value_prediction_params: &Vec<[f32; 7]>,
     width_prediction_params: &Vec<[f32; 7]>,
     decoder: &mut B64RansDecoderMulti<T>,
 ) -> i32 {
     let (bucket, prediction) = if haar_tree_position < 2 {
         prediction::get_lf_context_bucket(
-            haar_tree_position,
             depth,
             parent_pos,
-            fractal_lattice,
+            complex_plane,
             channel,
         )
     } else {
         prediction::get_hf_context_bucket(
             image_position,
             depth,
-            parent_pos,
-            fractal_lattice,
-            global_position_map,
+            complex_plane,
             value_prediction_params,
             width_prediction_params,
             channel,
@@ -291,17 +286,17 @@ pub fn encode(
     let mut channel_data: [Option<ChannelData>; 3] = [None, None, None];
     let sorted_lattice = image.get_sorted_lattice();
 
-    let global_depth = image.fractal_lattice[&sorted_lattice[0][0]].depth;
+    let global_depth = BASE_FRAC_DEPTH;
     for channel in 0..image.metadata.colorspace.num_channels() {
         let mut encoder: B64RansEncoderMulti<CONTEXT_AMOUNT> =
-            B64RansEncoderMulti::new(image.fractal_lattice.len() * 2 * (1 << global_depth));
+            B64RansEncoderMulti::new(image.complex_plane.fractals.len() * 2 * (1 << global_depth));
 
         let mut enc_symbols = Vec::<(B64RansEncSymbol, usize)>::new();
         enc_symbols.reserve(1 << global_depth);
 
         // First scan -> Low frequency coefficients
         for image_pos in sorted_lattice[0].iter() {
-            let fractal = &image.fractal_lattice.get(image_pos).unwrap();
+            let (fractal, _) = &image.complex_plane.get_parent_fractal_at(*image_pos, 0).unwrap();
             if let Some(value) = fractal.coefficients[channel][0] {
                 let (width, prediction) = fractal.parameter_predictors[channel][0];
                 let symbol =
@@ -312,7 +307,7 @@ pub fn encode(
 
         // Second scan -> High frequency coefficient root
         for image_pos in sorted_lattice[0].iter() {
-            let fractal = &image.fractal_lattice.get(image_pos).unwrap();
+            let (fractal, _) = &image.complex_plane.get_parent_fractal_at(*image_pos, 1).unwrap();
             if let Some(value) = fractal.coefficients[channel][1] {
                 let (width, prediction) = fractal.parameter_predictors[channel][1];
                 let symbol =
@@ -324,12 +319,8 @@ pub fn encode(
         // Remaining levels
         for level in 0..global_depth-1 {
             for image_pos in sorted_lattice[level].iter() {
-                let parent_pos = &image.global_position_map[level][image_pos];
-                let fractal = &image.fractal_lattice.get(parent_pos).unwrap();
-                let haar_tree_pos = fractal.position_map[level]
-                    .get(image_pos)
-                    .unwrap();
-                if let Some(_value) = fractal.coefficients[channel][*haar_tree_pos] {
+                let (fractal, haar_tree_pos) = &image.complex_plane.get_parent_fractal_at(*image_pos, level).unwrap();
+                if fractal.coefficients[channel][*haar_tree_pos].is_some() {
                     if let Some(left_coef) = fractal.coefficients[channel][*haar_tree_pos* 2] {
                         let (left_width, left_prediction) = fractal.parameter_predictors[channel][*haar_tree_pos*2];
                         let left_symbol = encode_symbol(
@@ -384,7 +375,7 @@ pub fn decode(mut compressed_image: CompressedImage) -> Result<WaveletImage, Str
 
     let sorted_lattice = decoded.get_sorted_lattice().clone();
     let mut channel = 0;
-    let global_depth = decoded.fractal_lattice[&sorted_lattice[0][0]].depth;
+    let global_depth = BASE_FRAC_DEPTH;
     while let Some(ChannelData {
         ans_contexts,
         data,
@@ -402,13 +393,12 @@ pub fn decode(mut compressed_image: CompressedImage) -> Result<WaveletImage, Str
                 image_pos,
                 channel,
                 &ans_contexts,
-                &decoded.fractal_lattice,
-                &decoded.global_position_map,
+                &decoded.complex_plane,
                 &value_prediction_parameters,
                 &width_prediction_parameters,
                 &mut decoder,
             );
-            let fractal = decoded.fractal_lattice.get_mut(image_pos).unwrap();
+            let fractal = decoded.complex_plane.get_fractal_mut(*image_pos).unwrap();
             fractal.coefficients[channel][0] = Some(symbol);
         }
 
@@ -421,71 +411,66 @@ pub fn decode(mut compressed_image: CompressedImage) -> Result<WaveletImage, Str
                 image_pos,
                 channel,
                 &ans_contexts,
-                &decoded.fractal_lattice,
-                &decoded.global_position_map,
+                &decoded.complex_plane,
                 &value_prediction_parameters,
                 &width_prediction_parameters,
                 &mut decoder,
             );
-            let fractal = decoded.fractal_lattice.get_mut(image_pos).unwrap();
+            let fractal = decoded.complex_plane.get_fractal_mut(*image_pos).unwrap();
             fractal.coefficients[channel][1] = Some(symbol);
         }
 
         // Remaining levels
         for level in 0..global_depth-1 {
             for image_pos in sorted_lattice[level].iter() {
-                let parent_pos = &decoded.global_position_map[level][image_pos];
-                let fractal = &decoded.fractal_lattice.get(parent_pos).unwrap();
-                let haar_tree_pos = *fractal.position_map[level]
-                    .get(image_pos)
-                    .unwrap();
-                if decoded.fractal_lattice[parent_pos].coefficients[channel][haar_tree_pos]
+                let mut left_symbol: Option<i32> = None;
+                let mut right_symbol: Option<i32> = None;
+
+                let (fractal, haar_tree_pos) = decoded.complex_plane.get_parent_fractal_at(*image_pos, level).unwrap();
+                if fractal.coefficients[channel][haar_tree_pos]
                     .is_none()
                 {
                     continue;
                 }
-
-                if decoded.fractal_lattice[parent_pos].coefficients[channel][2*haar_tree_pos]
+                if fractal.coefficients[channel][2*haar_tree_pos]
                     .is_some()
                 {
-                    let symbol = decode_symbol(
+                    left_symbol = Some(decode_symbol(
                         *image_pos,
                         2*haar_tree_pos,
                         level,
-                        parent_pos,
+                        &fractal.center,
                         channel,
                         &ans_contexts,
-                        &decoded.fractal_lattice,
-                        &decoded.global_position_map,
+                        &decoded.complex_plane,
                         &value_prediction_parameters,
                         &width_prediction_parameters,
                         &mut decoder,
-                    );
+                    ));
 
-                    let fractal = decoded.fractal_lattice.get_mut(parent_pos).unwrap();
-                    fractal.coefficients[channel][2*haar_tree_pos] = Some(symbol);
                 }
 
-                if decoded.fractal_lattice[parent_pos].coefficients[channel][2*haar_tree_pos+1]
+                if fractal.coefficients[channel][2*haar_tree_pos+1]
                     .is_some()
                 {
-                    let symbol = decode_symbol(
+                     right_symbol = Some(decode_symbol(
                         *image_pos,
                         2*haar_tree_pos+1,
                         level,
-                        parent_pos,
+                        &fractal.center,
                         channel,
                         &ans_contexts,
-                        &decoded.fractal_lattice,
-                        &decoded.global_position_map,
+                        &decoded.complex_plane,
                         &value_prediction_parameters,
                         &width_prediction_parameters,
                         &mut decoder,
-                    );
+                    ));
 
-                    let fractal = decoded.fractal_lattice.get_mut(parent_pos).unwrap();
-                    fractal.coefficients[channel][2*haar_tree_pos+1] = Some(symbol);
                 }
+
+                let fractal_mut = decoded.complex_plane.get_fractal_mut(*image_pos).unwrap();
+                fractal_mut.coefficients[channel][2*haar_tree_pos] = left_symbol;
+                fractal_mut.coefficients[channel][2*haar_tree_pos+1] = right_symbol;
             }
         }
         channel += 1;

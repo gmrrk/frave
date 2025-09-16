@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use num::complex::Complex;
 
+use crate::complex_plane::{self, ComplexPlane};
+
 
 //fn get_literals<const N: usize>(d: f32) -> [Complex<f32>; N] {
 //    let base = Complex::new(d / 2., (2. - (d / 2.).powf(2.)).sqrt());
@@ -70,20 +72,16 @@ pub struct Fractal {
     pub center: Complex<i32>,
     pub coefficients: [Vec<Option<i32>>; 3],
     pub parameter_predictors: [Vec<(usize, i32)>; 3],
-    pub values: [Vec<Option<i32>>; 3],
-    pub position_map: Vec<HashMap<Complex<i32>, usize>>,
     pub image_positions: Vec<Complex<i32>>,
 }
 
 impl Fractal {
     pub fn new(depth: usize, center: Complex<i32>) -> Self {
-        let mut position_map = vec![HashMap::new(); depth];
         let mut image_positions = vec![Complex::<i32>::new(0, 0); 1 << (depth + 1)];
         image_positions[0] = center;
         image_positions[1] = center;
         for level in 0..depth {
             for pos in 1 << level..1 << (level + 1) {
-                position_map[level].insert(image_positions[pos], pos);
                 image_positions[2 * pos] = image_positions[pos];
                 image_positions[2 * pos + 1] =
                     image_positions[pos] + LITERALS[depth - level - 1];
@@ -99,9 +97,7 @@ impl Fractal {
                 vec![(0, 0); 1 << depth],
                 vec![(0, 0); 1 << depth],
             ],
-            position_map,
             image_positions,
-            values: [vec![], vec![], vec![]],
         }
     }
 
@@ -134,7 +130,7 @@ impl Fractal {
     pub fn get_left(
         center: Complex<i32>,
         depth: usize,
-        _global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
+        _complex_plane: &ComplexPlane,
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         center + vectors[4]
@@ -143,7 +139,7 @@ impl Fractal {
     pub fn get_right(
         center: Complex<i32>,
         depth: usize,
-        _global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
+        _complex_plane: &ComplexPlane,
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         center + vectors[1]
@@ -152,12 +148,12 @@ impl Fractal {
     pub fn get_down_left(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
+        complex_plane: &ComplexPlane,
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + vectors[3]))
-            && global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + Complex::new(1, 1)))
+            && !complex_plane.is_cell_on_level(center + vectors[3], BASE_FRAC_DEPTH - depth)
+            && complex_plane.is_cell_on_level(center + Complex::new(1, 1), BASE_FRAC_DEPTH - depth)
         {
             center + Complex::new(1, 1)
         } else {
@@ -168,12 +164,12 @@ impl Fractal {
     pub fn get_down_right(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
+        complex_plane: &ComplexPlane,
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + vectors[3]))
-            && global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + Complex::new(1, 1)))
+            && !complex_plane.is_cell_on_level(center + vectors[3], BASE_FRAC_DEPTH - depth)
+            && complex_plane.is_cell_on_level(center + Complex::new(1, 1), BASE_FRAC_DEPTH - depth)
         {
             center + Complex::new(1, 1) + vectors[1]
         } else {
@@ -184,12 +180,12 @@ impl Fractal {
     pub fn get_up_right(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
+        complex_plane: &ComplexPlane,
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + vectors[0]))
-            && global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + Complex::new(-1, -1)))
+            && !complex_plane.is_cell_on_level(center + vectors[0], BASE_FRAC_DEPTH - depth)
+            && complex_plane.is_cell_on_level(center + Complex::new(-1, -1), BASE_FRAC_DEPTH - depth)
         {
             center + Complex::new(-1, -1)
         } else {
@@ -200,12 +196,12 @@ impl Fractal {
     pub fn get_up_left(
         center: Complex<i32>,
         depth: usize,
-        global_position_map: &[HashMap<Complex<i32>, Complex<i32>>; BASE_FRAC_DEPTH],
+        complex_plane: &ComplexPlane,
     ) -> Complex<i32> {
         let vectors = Self::get_nearby_vectors(depth);
         if depth == 2
-            && !global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + vectors[0]))
-            && global_position_map[BASE_FRAC_DEPTH - depth].contains_key(&(center + Complex::new(-1, -1)))
+            && !complex_plane.is_cell_on_level(center + vectors[0], BASE_FRAC_DEPTH - depth)
+            && complex_plane.is_cell_on_level(center + Complex::new(-1, -1), BASE_FRAC_DEPTH - depth)
         {
             center + Complex::new(-1, -1) + vectors[4]
         } else {
